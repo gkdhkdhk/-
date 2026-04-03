@@ -484,6 +484,28 @@
   ::-webkit-scrollbar { width: 5px; }
   ::-webkit-scrollbar-track { background: #0f1a2e; }
   ::-webkit-scrollbar-thumb { background: #1a3a60; }
+
+  /* ── 원클릭 시작 버튼 ── */
+  #oneclick-start-btn {
+    background: #1a6b1a;
+    border: 2px solid #4caf50;
+    color: #ffffff;
+    padding: 6px 18px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    font-family: inherit;
+    letter-spacing: 0.5px;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  #oneclick-start-btn:hover:not(:disabled) {
+    background: #2a8b2a;
+    border-color: #5ecf60;
+    box-shadow: 0 0 12px rgba(76,175,80,0.4);
+  }
+  #oneclick-start-btn:disabled { cursor: default; opacity: 0.65; }
 </style>
 </head>
 <body>
@@ -514,6 +536,7 @@
   </div>
 
   <div class="topbar-right">
+    <button id="oneclick-start-btn">▶ 원클릭 시작</button>
     <a id="editor-link" href="editor.html" target="_blank"
        style="background:#0f3020;border:1px solid #2a7a4a;color:#6ecf9a;padding:5px 12px;border-radius:4px;font-size:12px;text-decoration:none;display:flex;align-items:center;gap:5px;transition:all 0.15s;"
        onmouseover="this.style.background='#1a5030'" onmouseout="this.style.background='#0f3020'">
@@ -579,8 +602,9 @@
   <span id="status-provinces">프로빈스: 0</span>
   <span id="status-factions">세력: 0</span>
   <span id="status-selected">선택: 없음</span>
+  <span id="status-battles">전투: 0건</span>
   <span id="status-faction-res" style="color:#f5a623;font-size:10px"></span>
-  <span style="margin-left:auto;color:#445">Phase 2 — M01+M02+M03+M04+M05</span>
+  <span style="margin-left:auto;color:#445">Phase 3 — M01~M07</span>
 </div>
 
 
@@ -1164,6 +1188,27 @@ const MapRenderer = (() => {
       // 세력별 중심 프로빈스에 세력명 표시
     }
 
+    // 5.5단계: 사단 배지
+    if (typeof MilitaryManager !== 'undefined') {
+      provinces.forEach(p => {
+        const divsHere = MilitaryManager.getDivisionsAt(p.id);
+        if (divsHere.length === 0) return;
+        const [cx, cy] = polyCenter(p.poly);
+        if (cx < 0 || cx > canvas.width || cy < 0 || cy > canvas.height) return;
+        const hasMoving = divsHere.some(d => d.state === 'moving');
+        const badgeY = cy + (scale > 0.8 ? 22 : 16) * scale;
+        ctx.save();
+        ctx.fillStyle = 'rgba(20,10,10,0.8)';
+        ctx.fillRect(cx - 13, badgeY - 7, 26, 14);
+        ctx.font = `bold ${Math.max(8, 9 * scale)}px 'Malgun Gothic', sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = hasMoving ? '#f5a623' : '#e94560';
+        ctx.fillText(`\u2694${divsHere.length}`, cx, badgeY);
+        ctx.restore();
+      });
+    }
+
     // 6단계: 탐라 섬 연결 힌트 선
     ctx.save();
     ctx.setLineDash([4, 8]);
@@ -1447,6 +1492,24 @@ const UI = (() => {
           <h4>건물 (${p.buildings.length})</h4>
           ${p.buildings.map(b=>`<div class="building-item"><span class="building-icon">${BUILDING_ICONS[b]||'🔹'}</span><span>${b}</span></div>`).join('')||'<div style="color:#445;font-size:11px">없음</div>'}
         </div>
+        ${(() => {
+          if (typeof MilitaryManager === 'undefined') return '';
+          const gData = MilitaryManager.getGarrison(p.id);
+          const divsHere = MilitaryManager.getDivisionsAt(p.id);
+          const movingDivs = divsHere.filter(d => d.state === 'moving');
+          const gPower = gData ? Math.round(MilitaryManager.getGarrisonPower(p.id)) : 0;
+          return `<div class="info-section">
+            <h4>⚔ 군사 현황</h4>
+            ${gData
+              ? `<div class="info-row"><span class="label">주둔군</span>
+                   <span class="value" style="font-size:10px">보병 ${gData.infantry} | 기병 ${gData.cavalry} | 궁수 ${gData.archers}</span></div>
+                 <div class="info-row"><span class="label">전투력</span>
+                   <span class="value" style="color:#e94560">${gPower.toLocaleString()}</span></div>`
+              : '<div style="color:#445;font-size:11px;padding:3px 0">주둔군 미배치</div>'}
+            <div class="info-row"><span class="label">사단</span>
+              <span class="value">${divsHere.length}개${movingDivs.length > 0 ? ` (이동중 ${movingDivs.length})` : ''}</span></div>
+          </div>`;
+        })()}
       </div>
 
       <!-- 세력 탭 -->
@@ -1949,6 +2012,589 @@ const CharacterManager = (() => {
 
 
 /* ════════════════════════════════════════════════════════
+   M06 — MILITARY MANAGER
+   병력/사단 시스템, 주둔군, 사단 이동, AI 행동
+════════════════════════════════════════════════════════ */
+const MilitaryManager = (() => {
+  "use strict";
+
+  // ── 게임 밸런스 상수 ──
+  const MARTIAL_BONUS_PER_POINT = 0.05; // 무력 1당 전투력 보정 (+5%)
+
+  // ── 병종 정의 ──
+  const UNIT_TYPES = {
+    infantry: { name:'보병',   power:1.0, cost:50,  upkeep:3  },
+    cavalry:  { name:'기병',   power:2.0, cost:120, upkeep:8  },
+    archers:  { name:'궁수',   power:0.8, cost:40,  upkeep:2  },
+    siege:    { name:'공성대', power:0.3, cost:200, upkeep:10 },
+  };
+
+  // ── 세력별 초기 병력 풀 ──
+  const INITIAL_GARRISON = {
+    '고려':    { infantry:800, cavalry:300, archers:400, siege:50 },
+    '북방부족':{ infantry:400, cavalry:800, archers:200, siege:10 },
+    '서방상인':{ infantry:500, cavalry:200, archers:600, siege:30 },
+    '동방호족':{ infantry:600, cavalry:400, archers:300, siege:20 },
+    '남방':    { infantry:600, cavalry:300, archers:350, siege:25 },
+  };
+
+  // ── 프로빈스 인접 관계 ──
+  const ADJACENCY = {
+    1:  [2, 4, 5],
+    2:  [1, 3, 6, 9],
+    3:  [2, 8, 10],
+    4:  [1, 5, 7],
+    5:  [1, 4, 6, 7],
+    6:  [2, 5, 7, 9, 11],
+    7:  [4, 5, 6, 11, 12],
+    8:  [3, 9, 10, 16],
+    9:  [2, 6, 8, 11, 18],
+    10: [3, 8, 16],
+    11: [6, 7, 9, 12, 13, 17, 18],
+    12: [7, 11, 13],
+    13: [11, 12, 14, 17],
+    14: [13, 15, 17],
+    15: [14],
+    16: [8, 10, 18],
+    17: [11, 13, 14, 18],
+    18: [9, 11, 16, 17],
+  };
+
+  // ── 내부 상태 ──
+  let _garrisonData = {};
+  // divisions: Array<{ id, factionId, units, locationId, targetId, travelDaysLeft, state }>
+  let _divisions = [];
+  let _nextDivId = 1;
+  let _tickCount = 0;
+
+  // ── 초기화 ──
+
+  /** 세력별 초기 주둔군 배치 */
+  function initGarrison() {
+    ProvinceManager.getAll().forEach(p => {
+      if (p.faction === '미지') return;
+      const base = INITIAL_GARRISON[p.faction];
+      if (!base) return;
+      const fDef = ProvinceManager.getFaction(p.faction);
+      const isCapital = fDef && fDef.capital === p.id;
+      const scale = isCapital ? 1.0 : 0.3;
+      _garrisonData[p.id] = {
+        factionId: p.faction,
+        infantry: Math.round(base.infantry * scale),
+        cavalry:  Math.round(base.cavalry  * scale),
+        archers:  Math.round(base.archers  * scale),
+        siege:    Math.round(base.siege    * scale),
+      };
+    });
+  }
+
+  /** AI 초기 사단 생성 (세력별 수도에 1개씩) */
+  function initAIDivisions() {
+    const fDefs = ProvinceManager.getFactions();
+    Object.values(fDefs).forEach(f => {
+      if (f.id === '미지' || !f.capital) return;
+      const base = INITIAL_GARRISON[f.id];
+      if (!base) return;
+      createDivision(f.id, f.capital, {
+        infantry: Math.round(base.infantry * 0.5),
+        cavalry:  Math.round(base.cavalry  * 0.5),
+        archers:  Math.round(base.archers  * 0.5),
+        siege:    Math.round(base.siege    * 0.5),
+      });
+    });
+  }
+
+  // ── 사단 생성/조회 ──
+
+  /** @returns {number} divisionId */
+  function createDivision(factionId, provinceId, units) {
+    const id = _nextDivId++;
+    _divisions.push({
+      id, factionId,
+      units: { infantry:0, cavalry:0, archers:0, siege:0, ...units },
+      locationId: provinceId,
+      targetId: null,
+      travelDaysLeft: 0,
+      state: 'idle',
+    });
+    return id;
+  }
+
+  /** @returns {boolean} */
+  function moveDivision(divisionId, targetProvinceId) {
+    const div = _divisions.find(d => d.id === divisionId);
+    if (!div || div.state !== 'idle') return false;
+    const isAdj = (ADJACENCY[div.locationId] || []).includes(targetProvinceId);
+    div.targetId = targetProvinceId;
+    div.travelDaysLeft = isAdj ? 3 : 5;
+    div.state = 'moving';
+    return true;
+  }
+
+  /** @returns {object|null} */
+  function getDivisionById(divId) {
+    return _divisions.find(d => d.id === divId) || null;
+  }
+
+  /** @returns {Array} */
+  function getDivisionsAt(provinceId) {
+    return _divisions.filter(d => d.locationId === provinceId);
+  }
+
+  /** @returns {Array} */
+  function getDivisionsByFaction(factionId) {
+    return _divisions.filter(d => d.factionId === factionId);
+  }
+
+  /** @returns {object|null} */
+  function getGarrison(provinceId) {
+    return _garrisonData[provinceId] || null;
+  }
+
+  /** @returns {number} */
+  function getGarrisonPower(provinceId) {
+    const g = _garrisonData[provinceId];
+    if (!g) return 0;
+    return calcDivisionPower(g, g.factionId, provinceId);
+  }
+
+  // ── 전투력 계산 ──
+  function calcDivisionPower(units, factionId, provinceId) {
+    let power = 0;
+    Object.entries(UNIT_TYPES).forEach(([type, ut]) => {
+      power += (units[type] || 0) * ut.power;
+    });
+    const ruler = CharacterManager.getRuler(factionId);
+    if (ruler) {
+      const stats = CharacterManager.getEffectiveStats(ruler);
+      power *= (1 + (stats.martial || 0) * MARTIAL_BONUS_PER_POINT);
+    }
+    return Math.max(1, power);
+  }
+
+  // ── 전투 체크 ──
+  function _checkBattleAtProvince(provinceId) {
+    const idleDivs = _divisions.filter(d => d.locationId === provinceId && d.state === 'idle');
+    if (idleDivs.length === 0) return;
+
+    // Division vs garrison
+    const g = _garrisonData[provinceId];
+    if (g && g.factionId !== '미지') {
+      for (const div of idleDivs) {
+        if (div.factionId !== g.factionId) {
+          div.state = 'fighting';
+          GameCore.emit('battleStart', {
+            attackerDivId: div.id,
+            defenderInfo: { type: 'garrison', id: provinceId },
+            provinceId,
+          });
+          return;
+        }
+      }
+    }
+
+    // Division vs division
+    if (idleDivs.length >= 2) {
+      for (let i = 0; i < idleDivs.length; i++) {
+        for (let j = i + 1; j < idleDivs.length; j++) {
+          const d1 = idleDivs[i], d2 = idleDivs[j];
+          if (d1.factionId !== d2.factionId && d1.state === 'idle' && d2.state === 'idle') {
+            d1.state = 'fighting';
+            d2.state = 'fighting';
+            GameCore.emit('battleStart', {
+              attackerDivId: d1.id,
+              defenderInfo: { type: 'division', id: d2.id },
+              provinceId,
+            });
+            return;
+          }
+        }
+      }
+    }
+  }
+
+  // ── 틱 처리 ──
+  function onTick() {
+    _tickCount++;
+    // 이동 처리
+    _divisions.forEach(div => {
+      if (div.state === 'moving') {
+        div.travelDaysLeft--;
+        if (div.travelDaysLeft <= 0) {
+          div.locationId = div.targetId;
+          div.targetId = null;
+          div.state = 'idle';
+          GameCore.emit('divisionArrived', { divisionId: div.id, provinceId: div.locationId });
+          _checkBattleAtProvince(div.locationId);
+        }
+      }
+    });
+    // AI 틱 (30일마다)
+    if (_tickCount % 30 === 0) _aiTick();
+  }
+
+  // ── AI 행동 ──
+  function _aiTick() {
+    Object.keys(INITIAL_GARRISON).forEach(fid => {
+      const fDivs = getDivisionsByFaction(fid);
+      const idleDivs = fDivs.filter(d => d.state === 'idle');
+      if (idleDivs.length === 0) {
+        _aiCreateDivision(fid);
+        return;
+      }
+      idleDivs.forEach(div => {
+        const target = _findAttackTarget(fid, div.locationId);
+        if (target !== null) moveDivision(div.id, target);
+      });
+    });
+  }
+
+  function _findAttackTarget(fid, fromId) {
+    // 즉시 인접 적 탐색
+    const adjIds = ADJACENCY[fromId] || [];
+    for (const adjId of adjIds) {
+      const p = ProvinceManager.getById(adjId);
+      if (!p || p.faction === fid || p.faction === '미지') continue;
+      const rel = FactionManager.getRelation(fid, p.faction);
+      if (rel < 0) return adjId;
+    }
+    // BFS로 자기 영토 통과해 적 접경 찾기
+    const visited = new Set([fromId]);
+    const queue = [[fromId, null]];
+    while (queue.length > 0) {
+      const [curr, firstStep] = queue.shift();
+      for (const adjId of (ADJACENCY[curr] || [])) {
+        if (visited.has(adjId)) continue;
+        visited.add(adjId);
+        const p = ProvinceManager.getById(adjId);
+        if (!p) continue;
+        const step = firstStep !== null ? firstStep : adjId;
+        if (p.faction !== fid && p.faction !== '미지') {
+          const rel = FactionManager.getRelation(fid, p.faction);
+          if (rel < 0) return step;
+        } else if (p.faction === fid) {
+          queue.push([adjId, step]);
+        }
+      }
+    }
+    return null;
+  }
+
+  function _aiCreateDivision(fid) {
+    const fDef = ProvinceManager.getFaction(fid);
+    if (!fDef || !fDef.capital) return;
+    const fs = FactionManager.getAllFactionStates()[fid];
+    if (!fs || fs.gold < 300) return;
+    const base = INITIAL_GARRISON[fid];
+    if (!base) return;
+    if (Math.random() < 0.3) {
+      createDivision(fid, fDef.capital, {
+        infantry: Math.round(base.infantry * 0.3),
+        cavalry:  Math.round(base.cavalry  * 0.3),
+        archers:  Math.round(base.archers  * 0.3),
+        siege:    0,
+      });
+      fs.gold = Math.round(fs.gold - 200);
+    }
+  }
+
+  // ── 월 유지비 ──
+  function onMonthUpkeep() {
+    const states = FactionManager.getAllFactionStates();
+    Object.keys(INITIAL_GARRISON).forEach(fid => {
+      const fDivs = getDivisionsByFaction(fid);
+      let upkeep = 0;
+      fDivs.forEach(div => {
+        Object.entries(UNIT_TYPES).forEach(([type, ut]) => {
+          upkeep += Math.ceil((div.units[type] || 0) * ut.upkeep / 100);
+        });
+      });
+      if (states[fid]) states[fid].gold = Math.round(states[fid].gold - upkeep);
+    });
+  }
+
+  // ── 사단 상태 변경 (전투 엔진에서 사용) ──
+  function setDivisionState(divId, state) {
+    const div = _divisions.find(d => d.id === divId);
+    if (div) div.state = state;
+  }
+
+  function updateDivision(divId, newUnits) {
+    const div = _divisions.find(d => d.id === divId);
+    if (div) div.units = { ...newUnits };
+  }
+
+  function disbandDivision(divId) {
+    _divisions = _divisions.filter(d => d.id !== divId);
+  }
+
+  function retreatDivision(divId, fromProvinceId) {
+    const div = _divisions.find(d => d.id === divId);
+    if (!div) return;
+    const adj = ADJACENCY[fromProvinceId] || [];
+    const friendlyAdj = adj.filter(id => {
+      const p = ProvinceManager.getById(id);
+      return p && p.faction === div.factionId;
+    });
+    if (friendlyAdj.length > 0) {
+      div.locationId = friendlyAdj[0];
+      div.state = 'idle';
+    } else {
+      disbandDivision(divId);
+    }
+  }
+
+  function updateGarrisonOwner(provinceId, newFactionId) {
+    const g = _garrisonData[provinceId];
+    if (g) {
+      g.factionId = newFactionId;
+      g.infantry  = Math.round(g.infantry * 0.2);
+      g.cavalry   = Math.round(g.cavalry  * 0.2);
+      g.archers   = Math.round(g.archers  * 0.2);
+      g.siege     = Math.round(g.siege    * 0.2);
+    } else {
+      const base = INITIAL_GARRISON[newFactionId];
+      if (base) {
+        _garrisonData[provinceId] = {
+          factionId: newFactionId,
+          infantry: Math.round(base.infantry * 0.1),
+          cavalry:  0,
+          archers:  Math.round(base.archers  * 0.1),
+          siege:    0,
+        };
+      }
+    }
+  }
+
+  function updateGarrisonCasualties(provinceId, casualties) {
+    const g = _garrisonData[provinceId];
+    if (!g) return;
+    Object.entries(casualties).forEach(([type, loss]) => {
+      if (g[type] !== undefined) g[type] = Math.max(0, g[type] - (loss || 0));
+    });
+  }
+
+  return {
+    initGarrison, initAIDivisions,
+    createDivision, moveDivision,
+    getDivisionById, getDivisionsAt, getDivisionsByFaction,
+    getGarrison, getGarrisonPower, calcDivisionPower,
+    onTick, onMonthUpkeep,
+    setDivisionState, updateDivision, disbandDivision,
+    retreatDivision, updateGarrisonOwner, updateGarrisonCasualties,
+    getUnitTypes: () => UNIT_TYPES,
+    getAdjacency: () => ADJACENCY,
+    getMartialBonus: () => MARTIAL_BONUS_PER_POINT,
+  };
+})();
+
+
+/* ════════════════════════════════════════════════════════
+   M07 — COMBAT ENGINE
+   전투력 계산, 승패 판정, 손실 처리, 점령
+════════════════════════════════════════════════════════ */
+const CombatEngine = (() => {
+  "use strict";
+
+  // ── 게임 밸런스 상수 ──
+  const ATTACKER_CASUALTY_RATE = 0.25; // 공격자 손실 비율
+  const DEFENDER_CASUALTY_RATE = 0.30; // 수비자 손실 비율
+  const MIN_DIVISION_SIZE      = 50;   // 사단 해산 임계 병력
+  const COMBAT_VARIANCE_MIN    = 0.93; // 전투 랜덤 분산 하한 (±7%)
+  const COMBAT_VARIANCE_RANGE  = 0.14; // 전투 랜덤 분산 범위
+
+  let _totalBattles = 0;
+
+  // ── 전투력 계산 ──
+  /** @param {boolean} isDefender 수비측은 지형 보정 적용 */
+  function calcCombatPower(units, factionId, provinceId, isDefender) {
+    const UNIT_TYPES = MilitaryManager.getUnitTypes();
+    let power = 0;
+    Object.entries(UNIT_TYPES).forEach(([type, ut]) => {
+      power += (units[type] || 0) * ut.power;
+    });
+    // 지형 방어 보정 (수비측만)
+    if (isDefender) {
+      const prov = ProvinceManager.getById(provinceId);
+      if (prov) {
+        const terrain = ProvinceManager.getTerrain(prov.terrain);
+        if (terrain) power *= terrain.defMod;
+      }
+    }
+    // 지휘관 무력 보정
+    const ruler = CharacterManager.getRuler(factionId);
+    if (ruler) {
+      const stats = CharacterManager.getEffectiveStats(ruler);
+      power *= (1 + (stats.martial || 0) * MilitaryManager.getMartialBonus());
+    }
+    return Math.max(1, power);
+  }
+
+  // ── 손실 계산 ──
+  function _calcCasualties(atkPower, defPower, atkUnits, defUnits) {
+    const atkTotal = Object.values(atkUnits).reduce((s, v) => s + v, 0);
+    const defTotal = Object.values(defUnits).reduce((s, v) => s + v, 0);
+    const ratio = atkPower / (atkPower + defPower);
+    return {
+      attackerLoss: Math.round(atkTotal * (1 - ratio) * ATTACKER_CASUALTY_RATE),
+      defenderLoss: Math.round(defTotal * ratio       * DEFENDER_CASUALTY_RATE),
+    };
+  }
+
+  function _applyUnitCasualties(units, totalLoss) {
+    const total = Object.values(units).reduce((s, v) => s + v, 0);
+    if (total === 0) return { ...units };
+    const ratio = Math.min(totalLoss / total, 1);
+    const result = {};
+    Object.entries(units).forEach(([type, count]) => {
+      result[type] = Math.max(0, Math.round(count * (1 - ratio)));
+    });
+    return result;
+  }
+
+  // ── 점령 처리 ──
+  function occupyProvince(provinceId, newFactionId) {
+    const prov = ProvinceManager.getById(provinceId);
+    if (!prov) return;
+    const oldFaction = prov.faction;
+    if (oldFaction === newFactionId) return;
+    prov.faction = newFactionId;
+    MilitaryManager.updateGarrisonOwner(provinceId, newFactionId);
+    Notifications.push(`\uD83C\uDFF4 ${prov.name} 점령! ${oldFaction} \u2192 ${newFactionId}`, 'alert');
+    MapRenderer.markDirty();
+    FactionManager.modRelation(oldFaction, newFactionId, -15);
+  }
+
+  // ── 전투 해결 메인 함수 ──
+  function resolveBattle({ attackerDivId, defenderInfo, provinceId }) {
+    const atkDiv = MilitaryManager.getDivisionById(attackerDivId);
+    if (!atkDiv) {
+      return;
+    }
+    const prov = ProvinceManager.getById(provinceId);
+    if (!prov) {
+      MilitaryManager.setDivisionState(attackerDivId, 'idle');
+      return;
+    }
+
+    // 수비 정보 취득
+    let defUnits, defFaction, defDivId = null;
+    if (defenderInfo.type === 'garrison') {
+      const g = MilitaryManager.getGarrison(provinceId);
+      if (!g) {
+        MilitaryManager.setDivisionState(attackerDivId, 'idle');
+        return;
+      }
+      defUnits  = { infantry:g.infantry, cavalry:g.cavalry, archers:g.archers, siege:g.siege };
+      defFaction = g.factionId;
+    } else {
+      const defDiv = MilitaryManager.getDivisionById(defenderInfo.id);
+      if (!defDiv) {
+        MilitaryManager.setDivisionState(attackerDivId, 'idle');
+        return;
+      }
+      defUnits  = { ...defDiv.units };
+      defFaction = defDiv.factionId;
+      defDivId  = defDiv.id;
+    }
+
+    // 같은 세력이면 전투 없음
+    if (atkDiv.factionId === defFaction) {
+      MilitaryManager.setDivisionState(attackerDivId, 'idle');
+      if (defDivId) MilitaryManager.setDivisionState(defDivId, 'idle');
+      return;
+    }
+
+    _totalBattles++;
+    _updateBattleStatus();
+
+    // 전투력 계산 + 랜덤 분산 (±7%)
+    const atkPower = calcCombatPower(atkDiv.units, atkDiv.factionId, provinceId, false);
+    const defPower = calcCombatPower(defUnits, defFaction, provinceId, true);
+    const atkRoll  = atkPower * (COMBAT_VARIANCE_MIN + Math.random() * COMBAT_VARIANCE_RANGE);
+    const defRoll  = defPower * (COMBAT_VARIANCE_MIN + Math.random() * COMBAT_VARIANCE_RANGE);
+    const atkWins  = atkRoll > defRoll;
+
+    // 손실 계산
+    const { attackerLoss, defenderLoss } = _calcCasualties(atkRoll, defRoll, atkDiv.units, defUnits);
+    const newAtkUnits = _applyUnitCasualties(atkDiv.units, attackerLoss);
+    const newDefUnits = _applyUnitCasualties(defUnits, defenderLoss);
+    const atkTotal = Object.values(newAtkUnits).reduce((s, v) => s + v, 0);
+    const defTotal = Object.values(newDefUnits).reduce((s, v) => s + v, 0);
+
+    Notifications.push(
+      `\u2694 전투: ${prov.name} \u2014 ${atkDiv.factionId} ${atkWins ? '승리' : '패배'} vs ${defFaction}`,
+      atkWins ? 'good' : 'warn'
+    );
+
+    if (atkWins) {
+      // 공격자 승리
+      if (atkTotal < MIN_DIVISION_SIZE) {
+        MilitaryManager.disbandDivision(attackerDivId);
+        Notifications.push(`${atkDiv.factionId}: 사단 해산 (병력 소진)`, 'warn');
+      } else {
+        MilitaryManager.updateDivision(attackerDivId, newAtkUnits);
+        MilitaryManager.setDivisionState(attackerDivId, 'idle');
+      }
+      // 수비자 패배
+      if (defDivId !== null) {
+        if (defTotal < MIN_DIVISION_SIZE) {
+          MilitaryManager.disbandDivision(defDivId);
+        } else {
+          MilitaryManager.updateDivision(defDivId, newDefUnits);
+          MilitaryManager.retreatDivision(defDivId, provinceId);
+        }
+      } else {
+        // 주둔군 손실
+        MilitaryManager.updateGarrisonCasualties(provinceId, {
+          infantry: (defUnits.infantry || 0) - (newDefUnits.infantry || 0),
+          cavalry:  (defUnits.cavalry  || 0) - (newDefUnits.cavalry  || 0),
+          archers:  (defUnits.archers  || 0) - (newDefUnits.archers  || 0),
+          siege:    (defUnits.siege    || 0) - (newDefUnits.siege    || 0),
+        });
+      }
+      occupyProvince(provinceId, atkDiv.factionId);
+    } else {
+      // 공격자 패배
+      if (atkTotal < MIN_DIVISION_SIZE) {
+        MilitaryManager.disbandDivision(attackerDivId);
+        Notifications.push(`${atkDiv.factionId}: 사단 해산 (병력 소진)`, 'warn');
+      } else {
+        MilitaryManager.updateDivision(attackerDivId, newAtkUnits);
+        MilitaryManager.retreatDivision(attackerDivId, provinceId);
+      }
+      // 수비자 손실
+      if (defDivId !== null) {
+        if (defTotal < MIN_DIVISION_SIZE) {
+          MilitaryManager.disbandDivision(defDivId);
+        } else {
+          MilitaryManager.updateDivision(defDivId, newDefUnits);
+          MilitaryManager.setDivisionState(defDivId, 'idle');
+        }
+      } else {
+        MilitaryManager.updateGarrisonCasualties(provinceId, {
+          infantry: (defUnits.infantry || 0) - (newDefUnits.infantry || 0),
+          cavalry:  (defUnits.cavalry  || 0) - (newDefUnits.cavalry  || 0),
+          archers:  (defUnits.archers  || 0) - (newDefUnits.archers  || 0),
+          siege:    (defUnits.siege    || 0) - (newDefUnits.siege    || 0),
+        });
+      }
+    }
+
+    MapRenderer.markDirty();
+    _updateBattleStatus();
+  }
+
+  function _updateBattleStatus() {
+    const el = document.getElementById('status-battles');
+    if (el) el.textContent = `전투: ${_totalBattles}건`;
+  }
+
+  return { resolveBattle, calcCombatPower, occupyProvince };
+})();
+
+
+/* ════════════════════════════════════════════════════════
    NOTIFICATIONS — 알림 피드 (맵 우하단)
 ════════════════════════════════════════════════════════ */
 const Notifications = (() => {
@@ -1995,8 +2641,26 @@ window.addEventListener('load', () => {
     Notifications.push(`📅 ${s.year}년이 시작되었습니다`);
   });
 
+  // M06: 매틱 사단 이동, 매월 유지비
+  GameCore.on('tick',     () => MilitaryManager.onTick());
+  GameCore.on('newMonth', () => MilitaryManager.onMonthUpkeep());
+  // M07: 전투 해결
+  GameCore.on('battleStart', data => CombatEngine.resolveBattle(data));
+
   // 초기 경제 계산
   FactionManager.onMonthTick();
+
+  // ▶ 원클릭 시작 버튼
+  document.getElementById('oneclick-start-btn').addEventListener('click', function () {
+    if (GameCore.getState().paused) GameCore.togglePause();
+    GameCore.setSpeed(2);
+    MilitaryManager.initGarrison();
+    MilitaryManager.initAIDivisions();
+    this.textContent = '▶ 진행중';
+    this.disabled = true;
+    Notifications.push('⚔ 전략 시뮬레이션 시작!', 'good');
+    MapRenderer.markDirty();
+  });
 
   // 초기 세력 패널
   setTimeout(() => UI.showFactionPanel(), 100);
