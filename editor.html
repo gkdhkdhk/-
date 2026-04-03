@@ -1,0 +1,1540 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>맵 에디터 — 대전략 시뮬레이션</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  width: 100%; height: 100%;
+  background: #0c1020;
+  color: #e0e0e0;
+  font-family: 'Malgun Gothic', '맑은 고딕', sans-serif;
+  font-size: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── 헤더 ── */
+#header {
+  background: #16213e;
+  border-bottom: 2px solid #0f3460;
+  height: 46px;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 6px;
+  flex-shrink: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  user-select: none;
+}
+#header::-webkit-scrollbar { height: 0; }
+
+#header-title { font-size:14px; font-weight:bold; color:#6ecf9a; letter-spacing:1px; white-space:nowrap; margin-right:4px; }
+.sep { width:1px; height:22px; background:#1a3050; flex-shrink:0; }
+
+.hbtn {
+  background: #0f2a40;
+  border: 1px solid #1a4060;
+  color: #b0c8e0;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: all 0.12s;
+  display: flex; align-items: center; gap: 4px;
+}
+.hbtn:hover { background:#1a4060; color:#fff; }
+.hbtn.active { background:#1a4a2a; border-color:#4ecf8a; color:#4ecf8a; }
+.hbtn.accent { background:#1a3060; border-color:#4a8ad0; color:#90c0f0; }
+.hbtn.accent:hover { background:#2a4a80; }
+.hbtn.warn { background:#3a1a00; border-color:#e94560; color:#f09090; }
+.hbtn.warn:hover { background:#5a2a00; }
+.hbtn.primary { background:#0d3a1a; border-color:#3aaf6a; color:#6ecf9a; font-weight:bold; }
+.hbtn.primary:hover { background:#1a5a2a; }
+
+#header-right { margin-left:auto; display:flex; gap:6px; align-items:center; flex-shrink:0; }
+#prov-count-badge { font-size:11px; color:#4a6a8a; white-space:nowrap; }
+
+/* ── 메인 워크스페이스 ── */
+#workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0; /* flex 자식이 shrink할 수 있게 */
+  overflow: hidden;
+}
+
+/* ── 왼쪽 툴바 ── */
+#toolbar {
+  width: 48px;
+  min-width: 48px;
+  background: #0f1a2e;
+  border-right: 1px solid #1a2a40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 0;
+  gap: 3px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.tbtn {
+  width: 36px;
+  height: 36px;
+  background: #0d2035;
+  border: 1px solid #1a3050;
+  border-radius: 5px;
+  cursor: pointer;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  font-size: 15px;
+  color: #6a8aaa;
+  transition: all 0.12s;
+  position: relative;
+  flex-shrink: 0;
+}
+.tbtn:hover { background:#1a3a50; color:#c0d8f0; }
+.tbtn.active { background:#1a4a2a; border-color:#4ecf8a; color:#4ecf8a; }
+.tbtn small { font-size: 7px; line-height: 1; color:#3a5060; margin-top:1px; }
+.tsep { width:28px; height:1px; background:#1a2a40; margin:2px 0; flex-shrink:0; }
+
+/* ── 캔버스 영역 ── */
+#canvas-area {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  background: #050a12;
+}
+#editorCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+/* 오버레이 */
+#hint-box {
+  position: absolute;
+  bottom: 10px; left: 10px;
+  background: rgba(10,20,40,0.88);
+  border: 1px solid #1a3a60;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 11px;
+  color: #6a8aaa;
+  line-height: 1.7;
+  pointer-events: none;
+  z-index: 5;
+}
+#hint-box b { color: #f5a623; }
+#cur-pos {
+  position: absolute; top:8px; left:8px;
+  font-size: 10px; color: #2a4a60;
+  background: rgba(5,10,20,0.7);
+  padding: 2px 8px; border-radius: 3px;
+  pointer-events: none; z-index:5;
+}
+#detect-progress {
+  position: absolute; inset: 0;
+  background: rgba(5,10,20,0.85);
+  display: none;
+  flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 14px; z-index: 20;
+}
+#detect-progress.show { display: flex; }
+#detect-bar-bg {
+  width: 320px; height: 10px;
+  background: #0a1a30; border: 1px solid #1a3a60;
+  border-radius: 5px; overflow: hidden;
+}
+#detect-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4ecf8a, #3aafca);
+  border-radius: 5px;
+  width: 0%;
+  transition: width 0.2s;
+}
+#detect-msg { font-size:13px; color:#6ecf9a; }
+
+/* ── 우측 패널 ── */
+#panel {
+  width: 250px;
+  min-width: 250px;
+  background: #14202e;
+  border-left: 1px solid #1a2a40;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+#panel-head {
+  background: #0f2a40;
+  padding: 8px 12px;
+  font-size: 12px; font-weight: bold; color: #f5a623;
+  border-bottom: 1px solid #1a3a50;
+  flex-shrink: 0;
+}
+#panel-scroll {
+  flex: 1; min-height: 0;
+  overflow-y: auto; padding: 10px;
+}
+#panel-scroll::-webkit-scrollbar { width: 4px; }
+#panel-scroll::-webkit-scrollbar-thumb { background: #1a3050; }
+
+.fg { margin-bottom: 10px; }
+.fl {
+  font-size: 10px; color: #5a7a9a;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  margin-bottom: 3px;
+}
+.fi {
+  width: 100%; background: #0a1825; border: 1px solid #1a3050;
+  border-radius: 3px; color: #c8e0f0; padding: 4px 7px;
+  font-size: 11px; font-family: inherit; outline: none;
+}
+.fi:focus { border-color: #3a6a9a; }
+.fsel {
+  width: 100%; background: #0a1825; border: 1px solid #1a3050;
+  border-radius: 3px; color: #c8e0f0; padding: 4px 7px;
+  font-size: 11px; font-family: inherit; outline: none; cursor: pointer;
+}
+.fsel option { background: #0a1825; }
+
+.color-swatches {
+  display: grid; grid-template-columns: repeat(5,1fr); gap: 3px; margin-top:4px;
+}
+.csw {
+  aspect-ratio: 1; border-radius: 3px; cursor: pointer;
+  border: 2px solid transparent; transition: transform 0.1s, border-color 0.1s;
+}
+.csw:hover { transform: scale(1.12); }
+.csw.sel { border-color: #fff; transform: scale(1.15); }
+.custom-color-row { display:flex; gap:5px; margin-top:5px; align-items:center; }
+#cc-picker { width:32px; height:26px; padding:0; border:1px solid #1a3050; border-radius:3px; cursor:pointer; background:none; }
+
+.tag-wrap { display:flex; flex-wrap:wrap; gap:3px; min-height:20px; }
+.tag {
+  background: #0e2235; border: 1px solid #1a3a55;
+  border-radius: 3px; padding: 2px 6px;
+  font-size: 10px; color: #7ab0d0; cursor:pointer;
+  display:flex; align-items:center; gap:3px;
+}
+.tag:hover { background: #1a3a50; }
+.tag .tx { color:#e94560; font-size:9px; }
+.tag-add { display:flex; gap:3px; margin-top:3px; }
+.tag-add input { flex:1; background:#0a1825; border:1px solid #1a3050; border-radius:3px; color:#c8e0f0; padding:3px 5px; font-size:10px; font-family:inherit; outline:none; }
+.tag-add button { background:#1a3050; border:1px solid #2a4a70; color:#8ab0d0; border-radius:3px; padding:3px 8px; cursor:pointer; font-size:10px; font-family:inherit; }
+.presets { display:flex; flex-wrap:wrap; gap:2px; margin-top:3px; }
+.pre-tag { font-size:9px; padding:1px 5px; background:#0a1825; border:1px solid #1a2a3a; border-radius:2px; color:#4a6a80; cursor:pointer; }
+.pre-tag:hover { color:#a0c8e0; border-color:#2a4a60; }
+
+input[type=range] { width:100%; accent-color:#f5a623; }
+.psep { height:1px; background:#1a2a40; margin:8px 0; }
+
+/* 프로빈스 목록 */
+.pli {
+  display:flex; align-items:center; gap:5px;
+  padding: 3px 5px; border-radius:3px; cursor:pointer;
+  border: 1px solid transparent; transition: background 0.1s; margin-bottom:2px;
+}
+.pli:hover { background:#0e2235; border-color:#1a3050; }
+.pli.sel { background:#0e2a40; border-color:#3a6a9a; }
+.pli-dot { width:10px; height:10px; border-radius:2px; flex-shrink:0; }
+.pli-name { flex:1; font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pli-id { font-size:9px; color:#2a4a60; }
+.pli-del { background:none; border:none; color:#e94560; cursor:pointer; font-size:11px; opacity:0; padding:0 2px; line-height:1; }
+.pli:hover .pli-del { opacity:0.7; }
+.pli-del:hover { opacity:1!important; }
+
+/* 빈 상태 안내 */
+#empty-guide { text-align:center; color:#2a4a60; padding:20px 10px; font-size:11px; line-height:1.9; }
+#empty-guide .eig { font-size:26px; display:block; margin-bottom:8px; }
+
+/* 하단 상태바 */
+#statusbar {
+  background: #080d18; border-top: 1px solid #0f1a2e;
+  height: 20px; min-height: 20px;
+  display: flex; align-items: center;
+  padding: 0 10px; gap: 16px;
+  font-size: 10px; color: #2a4a60;
+  flex-shrink: 0;
+}
+#statusbar span { color: #4a6a80; }
+
+/* 토스트 */
+#toast {
+  position: fixed; bottom: 28px; left: 50%;
+  transform: translateX(-50%) translateY(16px);
+  background: #0d2a18; border: 1px solid #2a7a4a; color: #6ecf9a;
+  padding: 7px 18px; border-radius: 5px; font-size:12px;
+  opacity: 0; transition: all 0.25s; pointer-events:none; z-index:999; white-space:nowrap;
+}
+#toast.show { opacity:1; transform: translateX(-50%) translateY(0); }
+
+/* 모달 */
+#modal-ov {
+  position:fixed; inset:0; background:rgba(0,0,0,0.75);
+  display:none; align-items:center; justify-content:center; z-index:100;
+}
+#modal-ov.show { display:flex; }
+#modal-box {
+  background:#14203a; border:2px solid #1a3a60; border-radius:10px;
+  width:660px; max-width:92vw; max-height:82vh;
+  display:flex; flex-direction:column; overflow:hidden;
+}
+#modal-head {
+  background:#0f2a40; padding:11px 16px;
+  font-size:13px; font-weight:bold; color:#f5a623;
+  display:flex; justify-content:space-between; align-items:center; flex-shrink:0;
+}
+#modal-close { background:none; border:none; color:#e94560; font-size:17px; cursor:pointer; }
+#modal-body { flex:1; overflow:auto; padding:14px; }
+#modal-foot { background:#0a1828; padding:9px 14px; display:flex; gap:7px; justify-content:flex-end; flex-shrink:0; }
+#modal-ta {
+  width:100%; min-height:280px;
+  background:#080e18; border:1px solid #1a2a40; border-radius:5px;
+  color:#6ecf9a; font-family:'Consolas',monospace; font-size:10px;
+  padding:9px; resize:none; outline:none; line-height:1.5;
+}
+
+/* 감지 설정 */
+.detect-opt { display:flex; flex-direction:column; gap:10px; }
+.dopt-row { display:flex; align-items:center; gap:10px; }
+.dopt-row label { font-size:11px; color:#7090b0; min-width:120px; }
+.dopt-row input[type=range] { flex:1; }
+.dopt-val { font-size:11px; color:#f5a623; min-width:36px; text-align:right; }
+.dopt-row input[type=checkbox] { accent-color:#6ecf9a; }
+.detect-note {
+  background:#0a1825; border:1px solid #1a3050; border-radius:5px;
+  padding:8px 12px; font-size:11px; color:#5a7a9a; line-height:1.6;
+}
+
+::-webkit-scrollbar { width:4px; height:4px; }
+::-webkit-scrollbar-track { background:#0a1020; }
+::-webkit-scrollbar-thumb { background:#1a3050; border-radius:2px; }
+</style>
+</head>
+<body>
+
+<!-- ═══ 헤더 ═══ -->
+<div id="header">
+  <div id="header-title">🗺 맵 에디터</div>
+  <div class="sep"></div>
+
+  <button class="hbtn primary" id="hbtn-load" onclick="loadImageFile()">📂 이미지 불러오기</button>
+  <button class="hbtn primary" id="hbtn-detect" onclick="showDetectModal()" disabled>🔍 자동 감지</button>
+  <div class="sep"></div>
+
+  <button class="hbtn active" id="hbtn-draw" onclick="setTool('draw')">✏ 그리기</button>
+  <button class="hbtn" id="hbtn-sel" onclick="setTool('select')">⭕ 선택</button>
+  <button class="hbtn" id="hbtn-era" onclick="setTool('erase')">✂ 삭제</button>
+  <div class="sep"></div>
+
+  <button class="hbtn" onclick="undo()" title="Ctrl+Z">↩ 취소</button>
+  <button class="hbtn" onclick="clearCurrent()" title="ESC">⊗ 초기화</button>
+  <div class="sep"></div>
+
+  <button class="hbtn" id="hbtn-grid" onclick="toggleGrid()" title="G">▦ 격자</button>
+  <button class="hbtn" onclick="fitView()" title="F">⊡ 화면맞춤</button>
+  <div class="sep"></div>
+
+  <button class="hbtn accent" onclick="showExport()">⬇ JSON내보내기</button>
+  <button class="hbtn accent" onclick="showImport()">⬆ JSON불러오기</button>
+
+  <div id="header-right">
+    <span id="prov-count-badge">프로빈스: 0개</span>
+    <a href="index.html" target="_blank" class="hbtn" style="text-decoration:none">🎮 게임으로</a>
+  </div>
+</div>
+
+<!-- ═══ 워크스페이스 ═══ -->
+<div id="workspace">
+
+  <!-- 왼쪽 툴바 -->
+  <div id="toolbar">
+    <div class="tbtn active" id="tb-draw" onclick="setTool('draw')" title="그리기 (D)">✏<small>그리기</small></div>
+    <div class="tbtn" id="tb-sel" onclick="setTool('select')" title="선택 (S)">⭕<small>선택</small></div>
+    <div class="tbtn" id="tb-era" onclick="setTool('erase')" title="삭제 (E)">✂<small>삭제</small></div>
+    <div class="tsep"></div>
+    <div class="tbtn" onclick="undo()" title="되돌리기 (Z)">↩<small>취소</small></div>
+    <div class="tbtn" onclick="clearCurrent()" title="ESC">✕<small>취소</small></div>
+    <div class="tsep"></div>
+    <div class="tbtn" onclick="zoomIn()" title="확대 (+)">🔍<small>확대</small></div>
+    <div class="tbtn" onclick="zoomOut()" title="축소 (-)">🔎<small>축소</small></div>
+    <div class="tbtn" onclick="fitView()" title="화면맞춤 (F)">⊡<small>맞춤</small></div>
+  </div>
+
+  <!-- 캔버스 영역 -->
+  <div id="canvas-area">
+    <canvas id="editorCanvas"></canvas>
+    <div id="cur-pos">x: 0, y: 0</div>
+    <div id="hint-box">
+      <b>🎯 그리기 모드</b><br>
+      좌클릭: 꼭짓점 추가<br>
+      더블클릭: 폴리곤 완성<br>
+      ESC / 우클릭: 취소<br>
+      Z: 마지막 꼭짓점 삭제
+    </div>
+
+    <!-- 자동감지 진행 오버레이 -->
+    <div id="detect-progress">
+      <div id="detect-msg">이미지 분석 중...</div>
+      <div id="detect-bar-bg"><div id="detect-bar-fill"></div></div>
+      <div style="font-size:11px;color:#3a6a8a">잠시만 기다려주세요</div>
+    </div>
+  </div>
+
+  <!-- 우측 패널 -->
+  <div id="panel">
+    <div id="panel-head">🏰 프로빈스 속성</div>
+    <div id="panel-scroll">
+
+      <div id="empty-guide">
+        <span class="eig">🗺</span>
+        이미지를 불러온 후<br>
+        <b style="color:#4ecf8a">🔍 자동 감지</b>를 누르거나<br>
+        직접 폴리곤을 그려보세요.
+      </div>
+
+      <!-- 속성 폼 -->
+      <div id="prop-form" style="display:none">
+        <div class="fg">
+          <div class="fl">📌 이름</div>
+          <input class="fi" id="pf-name" type="text" placeholder="프로빈스 이름" oninput="setProp('name',this.value)">
+        </div>
+        <div class="fg">
+          <div class="fl">🎨 색상</div>
+          <div class="color-swatches" id="csw-grid"></div>
+          <div class="custom-color-row">
+            <input type="color" id="cc-picker" onchange="setColor(this.value)">
+            <input class="fi" id="pf-color" type="text" placeholder="#2563c7" style="flex:1;font-size:10px" oninput="setProp('color',this.value)">
+          </div>
+        </div>
+        <div class="fg">
+          <div class="fl">⚔ 세력</div>
+          <select class="fsel" id="pf-faction" onchange="onFactionChange(this.value)">
+            <option value="고려">고려국</option>
+            <option value="북방부족">북방 부족 연맹</option>
+            <option value="서방상인">서방 상인 공화국</option>
+            <option value="동방호족">동방 호족 연합</option>
+            <option value="남방">남방 제후국</option>
+            <option value="미지">미지의 땅</option>
+            <option value="_custom">직접입력...</option>
+          </select>
+          <input class="fi" id="pf-faction-custom" type="text" placeholder="세력명" style="margin-top:4px;display:none" oninput="setProp('faction',this.value)">
+        </div>
+        <div class="fg">
+          <div class="fl">🌿 지형</div>
+          <select class="fsel" id="pf-terrain" onchange="setProp('terrain',this.value)">
+            <option value="plains">평원</option>
+            <option value="mountain">산악</option>
+            <option value="forest">삼림</option>
+            <option value="coast">해안</option>
+            <option value="hills">구릉</option>
+            <option value="tundra">동토</option>
+            <option value="swamp">습지</option>
+            <option value="island">섬</option>
+          </select>
+        </div>
+        <div class="fg">
+          <div class="fl">⬡ 자원</div>
+          <div class="tag-wrap" id="pf-res"></div>
+          <div class="tag-add">
+            <input type="text" id="res-input" placeholder="자원 추가..." onkeydown="if(event.key==='Enter')addRes()">
+            <button onclick="addRes()">+</button>
+          </div>
+          <div class="presets" id="res-presets"></div>
+        </div>
+        <div class="fg">
+          <div class="fl">🏗 건물</div>
+          <div class="tag-wrap" id="pf-bld"></div>
+          <div class="tag-add">
+            <input type="text" id="bld-input" placeholder="건물 추가..." onkeydown="if(event.key==='Enter')addBld()">
+            <button onclick="addBld()">+</button>
+          </div>
+          <div class="presets" id="bld-presets"></div>
+        </div>
+        <div class="fg">
+          <div class="fl">👥 인구</div>
+          <input class="fi" id="pf-pop" type="number" min="0" step="10000" oninput="setProp('population',+this.value||0)">
+        </div>
+        <div class="fg">
+          <div class="fl">⭐ 개발도: <span id="dev-num" style="color:#f5a623">3</span>/8</div>
+          <input type="range" id="pf-dev" min="1" max="8" value="3" oninput="document.getElementById('dev-num').textContent=this.value;setProp('development',+this.value)">
+        </div>
+        <div class="psep"></div>
+        <div style="display:flex;gap:5px">
+          <button class="hbtn" style="flex:1" onclick="dupSelected()">⧉ 복제</button>
+          <button class="hbtn warn" style="flex:1" onclick="delSelected()">🗑 삭제</button>
+        </div>
+      </div>
+
+      <div class="psep" id="list-sep" style="display:none"></div>
+
+      <!-- 프로빈스 목록 -->
+      <div>
+        <div style="font-size:9px;color:#2a4a60;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">전체 프로빈스</div>
+        <div id="prov-list"></div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- 상태바 -->
+<div id="statusbar">
+  <span id="sb-tool">도구: 그리기</span>
+  <span id="sb-vtx">꼭짓점: 0</span>
+  <span id="sb-zoom">줌: 100%</span>
+  <span id="sb-sel">선택: 없음</span>
+  <span style="margin-left:auto;color:#1a3040">단색 PNG → 자동감지 최적화 | 수동 수정 가능</span>
+</div>
+
+<!-- 토스트 -->
+<div id="toast"></div>
+
+<!-- 모달 -->
+<div id="modal-ov" onclick="if(event.target===this)closeModal()">
+  <div id="modal-box">
+    <div id="modal-head">
+      <span id="modal-title">JSON 내보내기</span>
+      <button id="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div id="modal-body">
+      <textarea id="modal-ta" spellcheck="false"></textarea>
+    </div>
+    <div id="modal-foot" id="modal-foot"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ══════════════════════════════════════════════════════
+   상수 & 프리셋
+══════════════════════════════════════════════════════ */
+const COLORS = [
+  '#2563c7','#8b4513','#c6a800','#1a8a5a','#9b59b6','#e94560',
+  '#1abc9c','#e67e22','#3498db','#e74c3c','#27ae60','#8e44ad',
+  '#f39c12','#16a085','#c0392b','#2980b9','#d35400','#7f8c8d',
+];
+const RESOURCES = ['곡물','쌀','철광','금','구리','석재','목재','모피','어류','소금','말','직물','도자기','약초','인삼','진주','교역품'];
+const BUILDINGS = ['농장','목장','채굴장','제련소','목재소','항구','어항','교역소','시장','창고','사원','학당','성벽','요새','왕궁'];
+
+/* ══════════════════════════════════════════════════════
+   상태
+══════════════════════════════════════════════════════ */
+const canvas  = document.getElementById('editorCanvas');
+const ctx     = canvas.getContext('2d');
+
+let provinces  = [];
+let nextId     = 1;
+let tool       = 'draw';
+let curPoly    = [];
+let selId      = null;
+let hovId      = null;
+let showGrid   = false;
+let history    = [];
+let bgImg      = null;   // HTMLImageElement (배경)
+let bgOrigW    = 0, bgOrigH = 0;
+
+let scale  = 1, origX = 0, origY = 0;
+let mouseX = 0, mouseY = 0;
+let panning = false, panSX, panSY, panOX, panOY;
+let vtxDrag = false, vtxPid, vtxIdx, vtxOffX, vtxOffY;
+
+/* ══════════════════════════════════════════════════════
+   캔버스 크기 — canvas-area를 100% 채우기
+══════════════════════════════════════════════════════ */
+function resizeCanvas() {
+  const area = document.getElementById('canvas-area');
+  const w = area.clientWidth;
+  const h = area.clientHeight;
+  if (canvas.width === w && canvas.height === h) return;
+  canvas.width  = w;
+  canvas.height = h;
+}
+
+/* ══════════════════════════════════════════════════════
+   좌표 변환
+══════════════════════════════════════════════════════ */
+function toWorld(cx, cy) { return [(cx - origX) / scale, (cy - origY) / scale]; }
+function toCanvas(wx, wy) { return [wx * scale + origX, wy * scale + origY]; }
+
+const GRID = 20;
+function snap(x, y) {
+  if (!showGrid) return [x, y];
+  return [Math.round(x/GRID)*GRID, Math.round(y/GRID)*GRID];
+}
+
+/* ══════════════════════════════════════════════════════
+   뷰 조작
+══════════════════════════════════════════════════════ */
+function zoomAt(cx, cy, f) {
+  const ns = Math.max(0.1, Math.min(8, scale * f));
+  origX = cx - (cx - origX) * (ns / scale);
+  origY = cy - (cy - origY) * (ns / scale);
+  scale = ns;
+  document.getElementById('sb-zoom').textContent = `줌: ${Math.round(scale*100)}%`;
+}
+function zoomIn()  { zoomAt(canvas.width/2, canvas.height/2, 1.2); }
+function zoomOut() { zoomAt(canvas.width/2, canvas.height/2, 1/1.2); }
+
+// 이미지/맵이 화면을 꽉 채우도록 맞춤
+function fitView() {
+  if (bgImg) {
+    const sx = canvas.width  / bgOrigW;
+    const sy = canvas.height / bgOrigH;
+    scale = Math.min(sx, sy);  // contain (전체 보이게)
+    origX = (canvas.width  - bgOrigW * scale) / 2;
+    origY = (canvas.height - bgOrigH * scale) / 2;
+  } else if (provinces.length > 0) {
+    // 프로빈스 바운딩박스 계산
+    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    provinces.forEach(p => p.poly.forEach(([x,y]) => {
+      minX=Math.min(minX,x); minY=Math.min(minY,y);
+      maxX=Math.max(maxX,x); maxY=Math.max(maxY,y);
+    }));
+    const pad = 40;
+    const sx = (canvas.width  - pad*2) / (maxX - minX || 1);
+    const sy = (canvas.height - pad*2) / (maxY - minY || 1);
+    scale = Math.min(sx, sy);
+    origX = pad - minX * scale;
+    origY = pad - minY * scale;
+  } else {
+    scale = 1; origX = 0; origY = 0;
+  }
+  document.getElementById('sb-zoom').textContent = `줌: ${Math.round(scale*100)}%`;
+}
+
+/* ══════════════════════════════════════════════════════
+   이미지 불러오기
+══════════════════════════════════════════════════════ */
+function loadImageFile() {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'image/*';
+  inp.onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = () => {
+        bgImg   = img;
+        bgOrigW = img.naturalWidth;
+        bgOrigH = img.naturalHeight;
+        // 이미지 로드 후 화면에 꽉 차게 맞춤
+        fitView();
+        document.getElementById('hbtn-detect').disabled = false;
+        toast(`🖼 이미지 로드됨 (${bgOrigW}×${bgOrigH}px)`);
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+  inp.click();
+}
+
+/* ══════════════════════════════════════════════════════
+   자동감지 설정 모달
+══════════════════════════════════════════════════════ */
+let detectOpts = { step: 4, minSize: 300, rdpTol: 6, colorTol: 40, skipWhite: true, skipBlack: true, bgAlpha: 0.4 };
+
+function showDetectModal() {
+  document.getElementById('modal-title').textContent = '🔍 자동 프로빈스 감지 설정';
+  document.getElementById('modal-ta').style.display = 'none';
+  document.getElementById('modal-body').innerHTML = `
+    <div class="detect-note" style="margin-bottom:12px">
+      <b style="color:#6ecf9a">최적 사용법:</b> 각 프로빈스를 다른 단색으로 칠한 PNG를 불러오면<br>
+      색상별로 자동 감지합니다. JPEG는 압축 노이즈로 정확도가 낮을 수 있습니다.
+    </div>
+    <div class="detect-opt">
+      <div class="dopt-row">
+        <label>샘플 간격 (낮을수록 정밀)</label>
+        <input type="range" min="2" max="10" value="${detectOpts.step}" oninput="detectOpts.step=+this.value;this.nextElementSibling.textContent=this.value+'px'">
+        <span class="dopt-val">${detectOpts.step}px</span>
+      </div>
+      <div class="dopt-row">
+        <label>최소 영역 크기 (셀 수)</label>
+        <input type="range" min="50" max="2000" step="50" value="${detectOpts.minSize}" oninput="detectOpts.minSize=+this.value;this.nextElementSibling.textContent=this.value">
+        <span class="dopt-val">${detectOpts.minSize}</span>
+      </div>
+      <div class="dopt-row">
+        <label>폴리곤 단순화 강도</label>
+        <input type="range" min="1" max="30" value="${detectOpts.rdpTol}" oninput="detectOpts.rdpTol=+this.value;this.nextElementSibling.textContent=this.value">
+        <span class="dopt-val">${detectOpts.rdpTol}</span>
+      </div>
+      <div class="dopt-row">
+        <label>색상 병합 허용 오차</label>
+        <input type="range" min="0" max="100" value="${detectOpts.colorTol}" oninput="detectOpts.colorTol=+this.value;this.nextElementSibling.textContent=this.value">
+        <span class="dopt-val">${detectOpts.colorTol}</span>
+      </div>
+      <div class="dopt-row">
+        <label>흰색 배경/테두리 무시</label>
+        <input type="checkbox" ${detectOpts.skipWhite?'checked':''} onchange="detectOpts.skipWhite=this.checked">
+      </div>
+      <div class="dopt-row">
+        <label>검정 테두리 무시</label>
+        <input type="checkbox" ${detectOpts.skipBlack?'checked':''} onchange="detectOpts.skipBlack=this.checked">
+      </div>
+      <div class="dopt-row">
+        <label>기존 프로빈스 유지</label>
+        <input type="checkbox" id="keep-existing">
+      </div>
+    </div>
+  `;
+  document.getElementById('modal-foot').innerHTML = `
+    <button class="hbtn primary" onclick="runAutoDetect()">🔍 감지 시작</button>
+    <button class="hbtn" onclick="closeModal()">취소</button>
+  `;
+  openModal();
+}
+
+/* ══════════════════════════════════════════════════════
+   자동감지 알고리즘
+══════════════════════════════════════════════════════ */
+async function runAutoDetect() {
+  if (!bgImg) { toast('이미지를 먼저 불러오세요'); return; }
+  closeModal();
+
+  const keep = document.getElementById('keep-existing')?.checked ?? false;
+
+  // 오프스크린 캔버스에 이미지 그리기
+  const oc = document.createElement('canvas');
+  oc.width  = bgOrigW;
+  oc.height = bgOrigH;
+  const oc2 = oc.getContext('2d', { willReadFrequently: true });
+  oc2.drawImage(bgImg, 0, 0);
+
+  const { step, minSize, rdpTol, colorTol, skipWhite, skipBlack } = detectOpts;
+
+  showProgress('이미지 픽셀 스캔 중...', 0);
+  await sleep(30);
+
+  const W = bgOrigW, H = bgOrigH;
+  const imgData = oc2.getImageData(0, 0, W, H).data;
+
+  const cols = Math.ceil(W / step);
+  const rows = Math.ceil(H / step);
+
+  // ── 1. 색상 그리드 구축 ──
+  // 각 셀의 대표 색상 (양자화)
+  const Q = 24; // 색상 양자화 단계
+  const colorGrid = new Int32Array(cols * rows).fill(-1); // -1 = skip
+
+  for (let gy = 0; gy < rows; gy++) {
+    for (let gx = 0; gx < cols; gx++) {
+      const px = Math.min(gx * step + (step>>1), W-1);
+      const py = Math.min(gy * step + (step>>1), H-1);
+      const idx = (py * W + px) * 4;
+      const r = imgData[idx], g = imgData[idx+1], b = imgData[idx+2], a = imgData[idx+3];
+      if (a < 100) continue;
+      if (skipWhite && r>215 && g>215 && b>215) continue;
+      if (skipBlack && r<40  && g<40  && b<40)  continue;
+      const qr = Math.round(r/Q)*Q, qg = Math.round(g/Q)*Q, qb = Math.round(b/Q)*Q;
+      colorGrid[gy*cols + gx] = (qr<<16)|(qg<<8)|qb;
+    }
+  }
+
+  showProgress('색상 영역 분석 중...', 20);
+  await sleep(30);
+
+  // ── 2. 플러드 필로 연결된 색상 영역 찾기 ──
+  const visited = new Uint8Array(cols * rows);
+  const regions  = [];
+
+  function colorDist(c1, c2) {
+    if (c1 < 0 || c2 < 0) return 999;
+    return Math.abs((c1>>16&0xFF)-(c2>>16&0xFF))
+         + Math.abs((c1>>8 &0xFF)-(c2>>8 &0xFF))
+         + Math.abs((c1    &0xFF)-(c2    &0xFF));
+  }
+
+  for (let i = 0; i < cols * rows; i++) {
+    if (visited[i] || colorGrid[i] < 0) { visited[i] = 1; continue; }
+    const baseColor = colorGrid[i];
+    const cells = [];
+    const stack  = [i];
+    visited[i] = 1;
+
+    while (stack.length > 0) {
+      const curr = stack.pop();
+      cells.push(curr);
+      const cy = (curr / cols) | 0;
+      const cx = curr % cols;
+      // 4방향
+      const nbrs = [
+        cx>0      ? curr-1      : -1,
+        cx<cols-1 ? curr+1      : -1,
+        cy>0      ? curr-cols   : -1,
+        cy<rows-1 ? curr+cols   : -1,
+      ];
+      for (const ni of nbrs) {
+        if (ni < 0 || visited[ni]) continue;
+        if (colorGrid[ni] < 0) { visited[ni]=1; continue; }
+        if (colorDist(colorGrid[ni], baseColor) <= colorTol) {
+          visited[ni] = 1;
+          stack.push(ni);
+        }
+      }
+    }
+
+    if (cells.length >= minSize) {
+      const r = (baseColor>>16)&0xFF, g=(baseColor>>8)&0xFF, b=baseColor&0xFF;
+      const hex = '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+      regions.push({ color: hex, cells });
+    }
+  }
+
+  showProgress(`${regions.length}개 영역 외곽선 추출 중...`, 50);
+  await sleep(30);
+
+  // ── 3. 각 영역 외곽선 추출 ──
+  const newProvs = [];
+
+  for (let ri = 0; ri < regions.length; ri++) {
+    const { color, cells } = regions[ri];
+    const cellSet = new Set(cells);
+
+    // 외곽 셀 (이웃 중 다른 영역이 있는 셀)
+    const boundary = [];
+    for (const idx of cells) {
+      const cy = (idx/cols)|0, cx = idx%cols;
+      const isBorder =
+        cx===0 || cx===cols-1 || cy===0 || cy===rows-1 ||
+        !cellSet.has(idx-1) || !cellSet.has(idx+1) ||
+        !cellSet.has(idx-cols) || !cellSet.has(idx+cols);
+      if (isBorder) {
+        boundary.push([cx*step, cy*step]);
+      }
+    }
+
+    if (boundary.length < 4) continue;
+
+    // 외곽점 정렬 (중심각도 기준)
+    const cx0 = boundary.reduce((s,p)=>s+p[0],0)/boundary.length;
+    const cy0 = boundary.reduce((s,p)=>s+p[1],0)/boundary.length;
+    boundary.sort((a,b)=>Math.atan2(a[1]-cy0,a[0]-cx0)-Math.atan2(b[1]-cy0,b[0]-cx0));
+
+    // 서브샘플 (최대 400점)
+    const sub = [];
+    const stride = Math.max(1, Math.floor(boundary.length/400));
+    for (let k=0; k<boundary.length; k+=stride) sub.push(boundary[k]);
+
+    // RDP 단순화
+    const simplified = rdp(sub, rdpTol);
+    if (simplified.length < 3) continue;
+
+    newProvs.push({ color, poly: simplified });
+
+    if (ri % 5 === 0) {
+      showProgress(`외곽선 추출 중... (${ri+1}/${regions.length})`, 50 + (ri/regions.length)*40);
+      await sleep(0);
+    }
+  }
+
+  showProgress('프로빈스 생성 중...', 95);
+  await sleep(30);
+
+  // ── 4. 프로빈스 생성 ──
+  if (!keep) { provinces = []; nextId = 1; }
+
+  for (const np of newProvs) {
+    const id = nextId++;
+    provinces.push({
+      id, poly: np.poly,
+      name: `프로빈스 ${id}`,
+      color: np.color,
+      faction: '미지', terrain: 'plains',
+      resources: [], population: 100000,
+      buildings: [], development: 3,
+    });
+  }
+
+  hideProgress();
+  selId = null;
+  refreshPropForm();
+  refreshProvList();
+  refreshBadge();
+  fitView();
+  toast(`✓ ${newProvs.length}개 프로빈스 자동 생성 완료!`);
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function showProgress(msg, pct) {
+  const el = document.getElementById('detect-progress');
+  el.classList.add('show');
+  document.getElementById('detect-msg').textContent = msg;
+  document.getElementById('detect-bar-fill').style.width = pct + '%';
+}
+function hideProgress() {
+  document.getElementById('detect-progress').classList.remove('show');
+}
+
+/* ══════════════════════════════════════════════════════
+   RDP 폴리곤 단순화
+══════════════════════════════════════════════════════ */
+function rdp(pts, tol) {
+  if (pts.length <= 2) return pts;
+  const first = pts[0], last = pts[pts.length-1];
+  let maxD = 0, maxI = 0;
+  for (let i=1; i<pts.length-1; i++) {
+    const d = ptLineDist(pts[i], first, last);
+    if (d > maxD) { maxD = d; maxI = i; }
+  }
+  if (maxD > tol) {
+    const L = rdp(pts.slice(0, maxI+1), tol);
+    const R = rdp(pts.slice(maxI), tol);
+    return [...L.slice(0,-1), ...R];
+  }
+  return [first, last];
+}
+function ptLineDist(p, a, b) {
+  const dx = b[0]-a[0], dy = b[1]-a[1];
+  if (!dx && !dy) return Math.hypot(p[0]-a[0], p[1]-a[1]);
+  const t = Math.max(0, Math.min(1, ((p[0]-a[0])*dx+(p[1]-a[1])*dy)/(dx*dx+dy*dy)));
+  return Math.hypot(p[0]-(a[0]+t*dx), p[1]-(a[1]+t*dy));
+}
+
+/* ══════════════════════════════════════════════════════
+   도구 전환
+══════════════════════════════════════════════════════ */
+function setTool(t) {
+  if (t !== 'draw' && curPoly.length > 0) {
+    if (!confirm('현재 그리기 중인 폴리곤을 취소하시겠습니까?')) return;
+    curPoly = [];
+  }
+  tool = t;
+  ['draw','sel','era'].forEach(k=>{
+    document.getElementById(`tb-${k}`)   ?.classList.toggle('active', k===t);
+    document.getElementById(`hbtn-${k}`) ?.classList.toggle('active', k===t);
+  });
+  document.getElementById('sb-tool').textContent =
+    { draw:'그리기', sel:'선택', era:'삭제' }[t] || t;
+  canvas.style.cursor =
+    t==='draw' ? 'crosshair' : t==='era' ? 'not-allowed' : 'default';
+
+  const hints = {
+    draw: '<b>🎯 그리기 모드</b><br>좌클릭: 꼭짓점 추가<br>더블클릭: 폴리곤 완성<br>ESC / 우클릭: 취소<br>Z: 마지막 꼭짓점 삭제',
+    sel:  '<b>⭕ 선택 모드</b><br>좌클릭: 프로빈스 선택<br>꼭짓점 드래그: 형태 수정<br>Del: 삭제',
+    era:  '<b>✂ 삭제 모드</b><br>좌클릭: 프로빈스 삭제<br>(Z로 되돌리기 가능)',
+  };
+  document.getElementById('hint-box').innerHTML = hints[t]||'';
+}
+
+/* ══════════════════════════════════════════════════════
+   히스토리 & 편집
+══════════════════════════════════════════════════════ */
+function saveHist() {
+  history.push(JSON.parse(JSON.stringify(provinces)));
+  if (history.length > 40) history.shift();
+}
+
+function undo() {
+  if (curPoly.length > 0) { curPoly.pop(); sbVtx(); return; }
+  if (!history.length) { toast('더 이상 되돌릴 수 없습니다'); return; }
+  provinces = history.pop();
+  nextId = provinces.length ? Math.max(...provinces.map(p=>p.id))+1 : 1;
+  if (selId && !provinces.find(p=>p.id===selId)) { selId=null; refreshPropForm(); }
+  refreshProvList(); refreshBadge(); toast('↩ 되돌리기');
+}
+
+function clearCurrent() {
+  curPoly = [];
+  document.getElementById('sb-vtx').textContent = '꼭짓점: 0';
+}
+
+function sbVtx() {
+  document.getElementById('sb-vtx').textContent = `꼭짓점: ${curPoly.length}`;
+}
+
+/* ── 폴리곤 완성 ── */
+function finishPoly() {
+  if (curPoly.length < 3) { toast('꼭짓점이 3개 이상 필요합니다'); return; }
+  saveHist();
+  const id = nextId++;
+  provinces.push({
+    id, poly: [...curPoly],
+    name: `프로빈스 ${id}`,
+    color: COLORS[id % COLORS.length],
+    faction: '미지', terrain: 'plains',
+    resources: [], population: 100000,
+    buildings: [], development: 3,
+  });
+  curPoly = [];
+  selId = id;
+  refreshPropForm(); refreshProvList(); refreshBadge();
+  toast(`✓ 프로빈스 ${id} 완성!`);
+}
+
+/* ── 선택 삭제 ── */
+function delSelected() {
+  if (!selId) return;
+  const p = provinces.find(x=>x.id===selId);
+  if (!p || !confirm(`"${p.name}"을(를) 삭제하시겠습니까?`)) return;
+  saveHist();
+  provinces = provinces.filter(x=>x.id!==selId);
+  selId = null; refreshPropForm(); refreshProvList(); refreshBadge();
+  toast('🗑 삭제됨');
+}
+
+/* ── 복제 ── */
+function dupSelected() {
+  if (!selId) return;
+  const p = provinces.find(x=>x.id===selId);
+  if (!p) return;
+  saveHist();
+  const id = nextId++;
+  const off = 25/scale;
+  provinces.push({
+    ...JSON.parse(JSON.stringify(p)), id,
+    name: `${p.name} (복제)`,
+    poly: p.poly.map(([x,y])=>[x+off,y+off]),
+  });
+  selId = id; refreshPropForm(); refreshProvList(); refreshBadge();
+  toast('⧉ 복제됨');
+}
+
+/* ══════════════════════════════════════════════════════
+   속성 폼
+══════════════════════════════════════════════════════ */
+function setProp(key, val) {
+  if (!selId) return;
+  const p = provinces.find(x=>x.id===selId);
+  if (p) p[key] = val;
+}
+
+function onFactionChange(v) {
+  const ci = document.getElementById('pf-faction-custom');
+  ci.style.display = v==='_custom' ? 'block' : 'none';
+  if (v !== '_custom') setProp('faction', v);
+}
+
+function setColor(c) {
+  document.getElementById('pf-color').value = c;
+  setProp('color', c);
+  refreshPropForm();
+}
+
+function addRes() {
+  if (!selId) return;
+  const inp = document.getElementById('res-input');
+  const v = inp.value.trim(); if (!v) return;
+  const p = provinces.find(x=>x.id===selId);
+  if (!p || p.resources.includes(v)) { inp.value=''; return; }
+  saveHist(); p.resources.push(v); inp.value=''; refreshPropForm();
+}
+function addBld() {
+  if (!selId) return;
+  const inp = document.getElementById('bld-input');
+  const v = inp.value.trim(); if (!v) return;
+  const p = provinces.find(x=>x.id===selId);
+  if (!p || p.buildings.includes(v)) { inp.value=''; return; }
+  saveHist(); p.buildings.push(v); inp.value=''; refreshPropForm();
+}
+
+function refreshPropForm() {
+  const guide = document.getElementById('empty-guide');
+  const form  = document.getElementById('prop-form');
+  const lsep  = document.getElementById('list-sep');
+
+  if (!selId) {
+    guide.style.display='block'; form.style.display='none'; lsep.style.display='none';
+    document.getElementById('sb-sel').textContent='선택: 없음';
+    return;
+  }
+  const p = provinces.find(x=>x.id===selId);
+  if (!p) return;
+
+  guide.style.display='none'; form.style.display='block'; lsep.style.display='block';
+
+  document.getElementById('pf-name').value    = p.name;
+  document.getElementById('pf-color').value   = p.color;
+  document.getElementById('cc-picker').value  = p.color.length===7 ? p.color : '#888888';
+  document.getElementById('pf-terrain').value = p.terrain;
+  document.getElementById('pf-pop').value     = p.population;
+  document.getElementById('pf-dev').value     = p.development;
+  document.getElementById('dev-num').textContent = p.development;
+
+  // 세력
+  const knownFactions = ['고려','북방부족','서방상인','동방호족','남방','미지'];
+  if (knownFactions.includes(p.faction)) {
+    document.getElementById('pf-faction').value = p.faction;
+    document.getElementById('pf-faction-custom').style.display = 'none';
+  } else {
+    document.getElementById('pf-faction').value = '_custom';
+    document.getElementById('pf-faction-custom').style.display = 'block';
+    document.getElementById('pf-faction-custom').value = p.faction;
+  }
+
+  // 색상 스와치
+  document.querySelectorAll('.csw').forEach(s => {
+    s.classList.toggle('sel', s.dataset.c === p.color);
+  });
+
+  // 자원
+  renderTags('pf-res', p.resources, r => {
+    saveHist(); p.resources = p.resources.filter(x=>x!==r); refreshPropForm();
+  });
+  // 건물
+  renderTags('pf-bld', p.buildings, b => {
+    saveHist(); p.buildings = p.buildings.filter(x=>x!==b); refreshPropForm();
+  });
+
+  document.getElementById('sb-sel').textContent = `선택: ${p.name} (#${p.id})`;
+}
+
+function renderTags(elId, items, onDel) {
+  const el = document.getElementById(elId);
+  el.innerHTML = '';
+  items.forEach(item => {
+    const t = document.createElement('span');
+    t.className = 'tag';
+    t.innerHTML = `${item}<span class="tx">✕</span>`;
+    t.querySelector('.tx').onclick = () => onDel(item);
+    el.appendChild(t);
+  });
+}
+
+/* ══════════════════════════════════════════════════════
+   프로빈스 리스트
+══════════════════════════════════════════════════════ */
+function refreshProvList() {
+  const el = document.getElementById('prov-list');
+  el.innerHTML = '';
+  if (!provinces.length) {
+    el.innerHTML = '<div style="color:#1a3040;font-size:10px;text-align:center;padding:8px">없음</div>';
+    return;
+  }
+  provinces.forEach(p => {
+    const item = document.createElement('div');
+    item.className = 'pli' + (p.id===selId?' sel':'');
+    item.innerHTML = `<div class="pli-dot" style="background:${p.color}"></div><span class="pli-name">${p.name}</span><span class="pli-id">#${p.id}</span><button class="pli-del">✕</button>`;
+    item.querySelector('.pli-del').onclick = e => {
+      e.stopPropagation();
+      saveHist();
+      provinces = provinces.filter(x=>x.id!==p.id);
+      if (selId===p.id) { selId=null; refreshPropForm(); }
+      refreshProvList(); refreshBadge();
+      toast(`🗑 ${p.name} 삭제`);
+    };
+    item.onclick = () => { selId=p.id; refreshPropForm(); refreshProvList(); };
+    el.appendChild(item);
+  });
+}
+
+function refreshBadge() {
+  document.getElementById('prov-count-badge').textContent = `프로빈스: ${provinces.length}개`;
+}
+
+/* ══════════════════════════════════════════════════════
+   격자
+══════════════════════════════════════════════════════ */
+function toggleGrid() {
+  showGrid = !showGrid;
+  document.getElementById('hbtn-grid').classList.toggle('active', showGrid);
+}
+
+/* ══════════════════════════════════════════════════════
+   렌더링 루프
+══════════════════════════════════════════════════════ */
+function render() {
+  resizeCanvas();
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // 배경 (바다)
+  ctx.fillStyle = '#1a3a5c';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // 배경 이미지 (화면을 꽉 채우게 스케일)
+  if (bgImg) {
+    const iw = bgOrigW * scale;
+    const ih = bgOrigH * scale;
+    ctx.save();
+    ctx.globalAlpha = detectOpts.bgAlpha;
+    ctx.drawImage(bgImg, origX, origY, iw, ih);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  // 격자
+  if (showGrid) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 0.5;
+    const step = GRID * scale;
+    const sx = ((origX%step)+step)%step;
+    const sy = ((origY%step)+step)%step;
+    for (let x=sx; x<canvas.width; x+=step) {
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke();
+    }
+    for (let y=sy; y<canvas.height; y+=step) {
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // ── 완성 프로빈스 ──
+  provinces.forEach(p => {
+    if (p.poly.length < 3) return;
+    const cp = p.poly.map(([x,y])=>toCanvas(x,y));
+
+    ctx.beginPath();
+    ctx.moveTo(cp[0][0],cp[0][1]);
+    for (let i=1;i<cp.length;i++) ctx.lineTo(cp[i][0],cp[i][1]);
+    ctx.closePath();
+
+    const isSel = p.id===selId;
+    const isHov = p.id===hovId && tool!=='draw';
+
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = isSel ? 0.82 : isHov ? 0.72 : 0.60;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    ctx.strokeStyle = isSel ? '#fff' : isHov ? '#a0c8f0' : 'rgba(0,0,0,0.55)';
+    ctx.lineWidth   = isSel ? 2 : 0.8;
+    ctx.stroke();
+
+    // 선택 점선
+    if (isSel) {
+      ctx.save(); ctx.setLineDash([5,4]);
+      ctx.strokeStyle='#ffdd44'; ctx.lineWidth=1.5; ctx.stroke();
+      ctx.setLineDash([]); ctx.restore();
+    }
+
+    // 이름
+    const cx = cp.reduce((s,v)=>s+v[0],0)/cp.length;
+    const cy = cp.reduce((s,v)=>s+v[1],0)/cp.length;
+    ctx.save();
+    ctx.font = `bold ${Math.max(9, 11*scale)}px 'Malgun Gothic',sans-serif`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillStyle='rgba(0,0,0,0.75)'; ctx.fillText(p.name, cx+1, cy+1);
+    ctx.fillStyle = isSel ? '#ffdd44' : '#fff'; ctx.fillText(p.name, cx, cy);
+    ctx.restore();
+
+    // 삭제 모드 X
+    if (tool==='era' && isHov) {
+      ctx.save(); ctx.font='bold 18px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillStyle='rgba(233,69,96,0.85)'; ctx.fillText('✕',cx,cy); ctx.restore();
+    }
+
+    // 선택 꼭짓점 핸들
+    if (isSel && tool==='sel') {
+      cp.forEach(([vx,vy])=>{
+        ctx.beginPath(); ctx.arc(vx,vy,5,0,Math.PI*2);
+        ctx.fillStyle='#fff'; ctx.fill();
+        ctx.strokeStyle='#2a6ad0'; ctx.lineWidth=1.5; ctx.stroke();
+      });
+    }
+  });
+
+  // ── 현재 그리기 중 ──
+  if (curPoly.length>0 && tool==='draw') {
+    const cp = curPoly.map(([x,y])=>toCanvas(x,y));
+
+    if (cp.length>1) {
+      ctx.beginPath(); ctx.moveTo(cp[0][0],cp[0][1]);
+      for (let i=1;i<cp.length;i++) ctx.lineTo(cp[i][0],cp[i][1]);
+      ctx.strokeStyle='#6ecf9a'; ctx.lineWidth=1.5; ctx.setLineDash([5,3]); ctx.stroke(); ctx.setLineDash([]);
+
+      ctx.beginPath(); ctx.moveTo(cp[0][0],cp[0][1]);
+      for (let i=1;i<cp.length;i++) ctx.lineTo(cp[i][0],cp[i][1]);
+      ctx.closePath(); ctx.fillStyle='rgba(110,207,154,0.12)'; ctx.fill();
+    }
+
+    // 마우스 → 미리보기
+    const [lx,ly] = cp[cp.length-1];
+    ctx.beginPath(); ctx.moveTo(lx,ly); ctx.lineTo(mouseX,mouseY);
+    ctx.strokeStyle='rgba(110,207,154,0.45)'; ctx.lineWidth=1; ctx.setLineDash([4,6]); ctx.stroke(); ctx.setLineDash([]);
+
+    // 첫 꼭짓점 근접 시 닫기 표시
+    if (cp.length>=3) {
+      const [fx,fy] = cp[0];
+      if (Math.hypot(mouseX-fx,mouseY-fy)<18) {
+        ctx.beginPath(); ctx.arc(fx,fy,10,0,Math.PI*2);
+        ctx.strokeStyle='#6ecf9a'; ctx.lineWidth=2; ctx.stroke();
+        ctx.fillStyle='rgba(110,207,154,0.25)'; ctx.fill();
+      }
+    }
+
+    // 꼭짓점 점
+    cp.forEach(([vx,vy],i)=>{
+      ctx.beginPath(); ctx.arc(vx,vy,i===0?6:4,0,Math.PI*2);
+      ctx.fillStyle=i===0?'#6ecf9a':'#fff'; ctx.fill();
+      ctx.strokeStyle='#2a5a3a'; ctx.lineWidth=1; ctx.stroke();
+    });
+  }
+
+  requestAnimationFrame(render);
+}
+
+/* ══════════════════════════════════════════════════════
+   캔버스 이벤트
+══════════════════════════════════════════════════════ */
+function ptInPoly(px, py, poly) {
+  let inside = false;
+  for (let i=0,j=poly.length-1;i<poly.length;j=i++) {
+    const [xi,yi]=poly[i],[xj,yj]=poly[j];
+    if (((yi>py)!==(yj>py)) && (px<(xj-xi)*(py-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+
+function provAtWorld(wx, wy) {
+  for (let i=provinces.length-1;i>=0;i--) {
+    if (ptInPoly(wx,wy,provinces[i].poly)) return provinces[i];
+  }
+  return null;
+}
+
+canvas.addEventListener('mousemove', e => {
+  const r = canvas.getBoundingClientRect();
+  mouseX = e.clientX-r.left; mouseY = e.clientY-r.top;
+  const [wx,wy] = toWorld(mouseX,mouseY);
+  document.getElementById('cur-pos').textContent = `x: ${Math.round(wx)}, y: ${Math.round(wy)}`;
+
+  if (panning) {
+    origX = e.clientX - panSX + panOX;
+    origY = e.clientY - panSY + panOY;
+    return;
+  }
+  if (vtxDrag) {
+    const [swx,swy] = snap(wx-vtxOffX, wy-vtxOffY);
+    const p = provinces.find(x=>x.id===vtxPid);
+    if (p) p.poly[vtxIdx] = [swx,swy];
+    return;
+  }
+  if (tool!=='draw') {
+    const p = provAtWorld(wx,wy);
+    hovId = p ? p.id : null;
+  }
+});
+
+canvas.addEventListener('click', e => {
+  if (panning || vtxDrag) return;
+  const r = canvas.getBoundingClientRect();
+  const cx=e.clientX-r.left, cy=e.clientY-r.top;
+  const [wx,wy] = toWorld(cx,cy);
+
+  if (tool==='draw') {
+    const [sx,sy] = snap(wx,wy);
+    // 첫 꼭짓점 클릭 → 완성
+    if (curPoly.length>=3) {
+      const [fx,fy] = toCanvas(curPoly[0][0],curPoly[0][1]);
+      if (Math.hypot(cx-fx,cy-fy)<18) { finishPoly(); return; }
+    }
+    curPoly.push([sx,sy]); sbVtx();
+  } else if (tool==='sel') {
+    const p = provAtWorld(wx,wy);
+    selId = p ? p.id : null;
+    refreshPropForm(); refreshProvList();
+  } else if (tool==='era') {
+    const p = provAtWorld(wx,wy);
+    if (p) {
+      saveHist();
+      provinces = provinces.filter(x=>x.id!==p.id);
+      if (selId===p.id) { selId=null; refreshPropForm(); }
+      refreshProvList(); refreshBadge();
+      toast(`🗑 ${p.name} 삭제`);
+    }
+  }
+});
+
+canvas.addEventListener('dblclick', e => {
+  if (tool==='draw' && curPoly.length>=3) finishPoly();
+});
+
+canvas.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  if (tool==='draw') clearCurrent();
+});
+
+canvas.addEventListener('mousedown', e => {
+  if (e.button===1 || e.button===2) {
+    e.preventDefault();
+    panning=true; panSX=e.clientX; panSY=e.clientY; panOX=origX; panOY=origY;
+    return;
+  }
+  if (tool==='sel' && e.button===0 && selId) {
+    const p = provinces.find(x=>x.id===selId);
+    if (!p) return;
+    const r=canvas.getBoundingClientRect();
+    const mx=e.clientX-r.left, my=e.clientY-r.top;
+    for (let i=0;i<p.poly.length;i++) {
+      const [vx,vy]=toCanvas(p.poly[i][0],p.poly[i][1]);
+      if (Math.hypot(mx-vx,my-vy)<8) {
+        const [wx,wy]=toWorld(mx,my);
+        vtxDrag=true; vtxPid=selId; vtxIdx=i;
+        vtxOffX=wx-p.poly[i][0]; vtxOffY=wy-p.poly[i][1];
+        e.preventDefault(); return;
+      }
+    }
+  }
+});
+
+canvas.addEventListener('mouseup', () => {
+  if (vtxDrag) { saveHist(); vtxDrag=false; }
+  panning=false;
+});
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r=canvas.getBoundingClientRect();
+  zoomAt(e.clientX-r.left, e.clientY-r.top, e.deltaY>0 ? 1/1.1 : 1.1);
+}, {passive:false});
+
+// 키보드
+document.addEventListener('keydown', e => {
+  if (e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
+  if (e.key==='Escape') clearCurrent();
+  if (e.key==='z'||e.key==='Z') undo();
+  if ((e.ctrlKey||e.metaKey) && e.key==='z') { e.preventDefault(); undo(); }
+  if ((e.ctrlKey||e.metaKey) && e.key==='e') { e.preventDefault(); showExport(); }
+  if (e.key==='d'||e.key==='D') setTool('draw');
+  if (e.key==='s'||e.key==='S') setTool('sel');
+  if (e.key==='e'||e.key==='E') setTool('era');
+  if (e.key==='g'||e.key==='G') toggleGrid();
+  if (e.key==='f'||e.key==='F') fitView();
+  if (e.key==='+'||e.key==='=') zoomIn();
+  if (e.key==='-') zoomOut();
+  if (e.key==='Delete' && tool==='sel') delSelected();
+});
+
+/* ══════════════════════════════════════════════════════
+   JSON 내보내기 / 불러오기
+══════════════════════════════════════════════════════ */
+function showExport() {
+  const out = provinces.map((p,i)=>{
+    const n=i+1;
+    const pick = '#'+n.toString(16).padStart(2,'0')+'0000';
+    return { id:p.id, name:p.name, faction:p.faction, terrain:p.terrain,
+             resources:p.resources, population:p.population, buildings:p.buildings,
+             development:p.development, color:p.color, pickColor:pick,
+             poly:p.poly.map(([x,y])=>[Math.round(x),Math.round(y)]) };
+  });
+  document.getElementById('modal-title').textContent='JSON 내보내기';
+  document.getElementById('modal-ta').style.display='block';
+  document.getElementById('modal-ta').value='const PROVINCES_DATA = '+JSON.stringify(out,null,2)+';';
+  document.getElementById('modal-body').innerHTML='';
+  document.getElementById('modal-body').appendChild(document.getElementById('modal-ta'));
+  document.getElementById('modal-foot').innerHTML=`
+    <button class="hbtn accent" onclick="copyTA()">📋 클립보드 복사</button>
+    <button class="hbtn accent" onclick="dlTA()">💾 파일 다운로드</button>
+    <button class="hbtn" onclick="closeModal()">닫기</button>`;
+  openModal();
+}
+
+function showImport() {
+  document.getElementById('modal-title').textContent='JSON 불러오기 (붙여넣기 후 확인)';
+  document.getElementById('modal-ta').style.display='block';
+  document.getElementById('modal-ta').value='';
+  document.getElementById('modal-body').innerHTML='';
+  document.getElementById('modal-body').appendChild(document.getElementById('modal-ta'));
+  document.getElementById('modal-foot').innerHTML=`
+    <button class="hbtn primary" onclick="doImport()">✓ 불러오기</button>
+    <button class="hbtn" onclick="closeModal()">취소</button>`;
+  openModal();
+}
+
+function doImport() {
+  const text = document.getElementById('modal-ta').value.trim()
+                .replace(/^const\s+\w+\s*=\s*/,'').replace(/;$/,'');
+  let data;
+  try { data=JSON.parse(text); } catch(err) { toast('⚠ JSON 파싱 오류: '+err.message); return; }
+  if (!Array.isArray(data)) { toast('⚠ 배열 형식이어야 합니다'); return; }
+  saveHist();
+  provinces = data.map(p=>({
+    id:p.id||nextId++, name:p.name||'프로빈스',
+    color:p.color||'#2563c7', faction:p.faction||'미지',
+    terrain:p.terrain||'plains', resources:p.resources||[],
+    population:p.population||100000, buildings:p.buildings||[],
+    development:p.development||3, poly:p.poly||[],
+  }));
+  nextId = Math.max(nextId,...provinces.map(p=>p.id))+1;
+  selId=null; refreshPropForm(); refreshProvList(); refreshBadge();
+  closeModal(); fitView();
+  toast(`✓ ${provinces.length}개 불러오기 완료`);
+}
+
+function copyTA() {
+  const ta=document.getElementById('modal-ta'); ta.select(); document.execCommand('copy'); toast('📋 복사됨!');
+}
+function dlTA() {
+  const blob=new Blob([document.getElementById('modal-ta').value],{type:'text/javascript'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=url; a.download='provinces_export.js'; a.click(); URL.revokeObjectURL(url);
+  toast('💾 다운로드 완료');
+}
+
+/* ══════════════════════════════════════════════════════
+   모달 유틸
+══════════════════════════════════════════════════════ */
+function openModal()  { document.getElementById('modal-ov').classList.add('show'); }
+function closeModal() { document.getElementById('modal-ov').classList.remove('show'); }
+
+/* ══════════════════════════════════════════════════════
+   토스트
+══════════════════════════════════════════════════════ */
+let toastTm=null;
+function toast(msg) {
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
+  clearTimeout(toastTm); toastTm=setTimeout(()=>el.classList.remove('show'),2200);
+}
+
+/* ══════════════════════════════════════════════════════
+   초기화
+══════════════════════════════════════════════════════ */
+window.addEventListener('load', () => {
+  // 색상 스와치 생성
+  const sg = document.getElementById('csw-grid');
+  COLORS.forEach(c=>{
+    const s=document.createElement('div');
+    s.className='csw'; s.style.background=c; s.dataset.c=c; s.title=c;
+    s.onclick=()=>{
+      document.getElementById('pf-color').value=c;
+      document.getElementById('cc-picker').value=c;
+      setProp('color',c);
+      document.querySelectorAll('.csw').forEach(x=>x.classList.remove('sel'));
+      s.classList.add('sel');
+    };
+    sg.appendChild(s);
+  });
+
+  // 자원 프리셋
+  const rp=document.getElementById('res-presets');
+  RESOURCES.forEach(r=>{
+    const b=document.createElement('span'); b.className='pre-tag'; b.textContent=r;
+    b.onclick=()=>{ document.getElementById('res-input').value=r; addRes(); };
+    rp.appendChild(b);
+  });
+
+  // 건물 프리셋
+  const bp=document.getElementById('bld-presets');
+  BUILDINGS.forEach(b2=>{
+    const b=document.createElement('span'); b.className='pre-tag'; b.textContent=b2;
+    b.onclick=()=>{ document.getElementById('bld-input').value=b2; addBld(); };
+    bp.appendChild(b);
+  });
+
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+  refreshProvList();
+  requestAnimationFrame(render);
+  setTool('draw');
+});
+</script>
+</body>
+</html>

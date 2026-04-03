@@ -1,0 +1,2006 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>대전략 시뮬레이션 — 프로토타입 Phase 1</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #1a1a2e;
+    color: #e0e0e0;
+    font-family: 'Malgun Gothic', '맑은 고딕', sans-serif;
+    font-size: 13px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── 상단 바 ── */
+  #topbar {
+    background: #16213e;
+    border-bottom: 2px solid #0f3460;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 16px;
+    flex-shrink: 0;
+    user-select: none;
+  }
+  #game-title {
+    font-size: 15px;
+    font-weight: bold;
+    color: #e94560;
+    letter-spacing: 1px;
+    white-space: nowrap;
+  }
+  #date-display {
+    background: #0f3460;
+    padding: 4px 14px;
+    border-radius: 4px;
+    font-size: 15px;
+    font-weight: bold;
+    color: #f5a623;
+    min-width: 140px;
+    text-align: center;
+    border: 1px solid #e94560;
+  }
+  .ctrl-group {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+  .ctrl-btn {
+    background: #0f3460;
+    border: 1px solid #1a4a7a;
+    color: #c0c0d0;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .ctrl-btn:hover { background: #1a5590; color: #fff; }
+  .ctrl-btn.active { background: #e94560; color: #fff; border-color: #e94560; }
+  #pause-btn {
+    background: #7b2d00;
+    border-color: #e94560;
+    color: #fff;
+    font-size: 16px;
+    padding: 4px 14px;
+  }
+  #pause-btn:hover { background: #a03a00; }
+  #pause-btn.paused { background: #1a7b3c; border-color: #2ecc71; }
+
+  .topbar-right {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  #map-mode-label {
+    color: #888;
+    font-size: 12px;
+  }
+
+  /* ── 메인 레이아웃 ── */
+  #main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── 캔버스 영역 ── */
+  #canvas-wrap {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: #0a0a1a;
+    cursor: crosshair;
+  }
+  #gameCanvas {
+    display: block;
+  }
+  #map-tooltip {
+    position: absolute;
+    background: rgba(15,52,96,0.92);
+    border: 1px solid #e94560;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: #f0f0f0;
+    pointer-events: none;
+    display: none;
+    white-space: nowrap;
+    z-index: 10;
+  }
+
+  /* ── 사이드패널 ── */
+  #sidebar {
+    width: 300px;
+    background: #16213e;
+    border-left: 2px solid #0f3460;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  #sidebar-header {
+    background: #0f3460;
+    padding: 10px 14px;
+    font-size: 14px;
+    font-weight: bold;
+    color: #f5a623;
+    border-bottom: 1px solid #1a4a7a;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #sidebar-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+  }
+  #sidebar-body::-webkit-scrollbar { width: 4px; }
+  #sidebar-body::-webkit-scrollbar-track { background: #16213e; }
+  #sidebar-body::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 2px; }
+
+  .info-section {
+    margin-bottom: 14px;
+  }
+  .info-section h4 {
+    color: #f5a623;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid #1a4a7a;
+    padding-bottom: 3px;
+  }
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    border-bottom: 1px solid #1a2a44;
+    font-size: 12px;
+  }
+  .info-row .label { color: #8090a0; }
+  .info-row .value { color: #e0e8f0; font-weight: bold; }
+
+  .terrain-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: bold;
+  }
+  .resource-tag {
+    display: inline-block;
+    background: #0f3460;
+    border: 1px solid #1a5590;
+    border-radius: 3px;
+    padding: 2px 7px;
+    font-size: 11px;
+    margin: 2px 2px 2px 0;
+    color: #c0d8f0;
+  }
+  .faction-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 5px;
+    vertical-align: middle;
+  }
+
+  /* 건물 목록 */
+  .building-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    font-size: 12px;
+    color: #b0c4d8;
+  }
+  .building-icon { font-size: 14px; }
+
+  /* 세력 목록 */
+  #faction-list {
+    padding: 8px 0;
+  }
+  .faction-item {
+    display: flex;
+    align-items: center;
+    padding: 5px 8px;
+    border-radius: 4px;
+    margin-bottom: 4px;
+    background: #0f2040;
+    border: 1px solid #1a3a60;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .faction-item:hover { background: #1a3a60; }
+  .faction-color-bar {
+    width: 4px;
+    height: 30px;
+    border-radius: 2px;
+    margin-right: 8px;
+    flex-shrink: 0;
+  }
+  .faction-info { flex: 1; }
+  .faction-name { font-weight: bold; font-size: 12px; }
+  .faction-stats { font-size: 11px; color: #8090a0; margin-top: 1px; }
+
+  /* 하단 상태바 */
+  #statusbar {
+    background: #0f1a2e;
+    border-top: 1px solid #0f3460;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 20px;
+    font-size: 11px;
+    color: #6080a0;
+    flex-shrink: 0;
+  }
+  #statusbar span { color: #a0b8d0; }
+
+  /* 맵 모드 탭 */
+  .map-mode-btn {
+    background: #0a1a30;
+    border: 1px solid #1a3a5a;
+    color: #8090a0;
+    padding: 3px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .map-mode-btn:hover { color: #c0d0e0; border-color: #3a6a9a; }
+  .map-mode-btn.active { background: #1a4a7a; color: #fff; border-color: #5a9aca; }
+
+  /* 빈 패널 안내 */
+  #empty-hint {
+    text-align: center;
+    color: #3a5070;
+    padding: 40px 20px;
+    font-size: 13px;
+    line-height: 1.8;
+  }
+  #empty-hint .hint-icon { font-size: 36px; display: block; margin-bottom: 10px; }
+
+  /* progress 링크 버튼 */
+  #progress-link {
+    background: #2d1a5e;
+    border: 1px solid #7b52cf;
+    color: #c0a0ff;
+    padding: 5px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+    text-decoration: none;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s;
+  }
+  #progress-link:hover { background: #3d2a7e; color: #fff; }
+
+  /* 애니메이션 */
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+  .pulsing { animation: pulse 1s infinite; }
+  @keyframes shimmer {
+    0%   { background-position: -200% center; }
+    100% { background-position:  200% center; }
+  }
+
+  /* ── 타임바 ── */
+  #timebar {
+    background: #0c1428;
+    border-bottom: 1px solid #0f3460;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    gap: 6px;
+    flex-shrink: 0;
+    user-select: none;
+    overflow: hidden;
+  }
+  #timebar-label {
+    font-size: 10px;
+    color: #445;
+    white-space: nowrap;
+    min-width: 28px;
+  }
+  #month-track {
+    display: flex;
+    flex: 1;
+    gap: 2px;
+    height: 22px;
+  }
+  .month-cell {
+    flex: 1;
+    border-radius: 3px;
+    position: relative;
+    overflow: hidden;
+    cursor: default;
+    min-width: 0;
+    border: 1px solid rgba(0,0,0,0.3);
+  }
+  .month-cell-bg {
+    position: absolute; inset: 0;
+    opacity: 0.18;
+  }
+  .month-cell-fill {
+    position: absolute; top:0; left:0; bottom:0;
+    width: 0%;
+    transition: width 0.4s ease;
+  }
+  .month-cell-label {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px;
+    font-weight: bold;
+    color: rgba(255,255,255,0.7);
+    z-index: 2;
+    pointer-events: none;
+  }
+  .month-cell.current .month-cell-label { color: #fff; font-size: 10px; }
+  .month-cell.past .month-cell-fill { opacity: 0.6; }
+  .month-cell.current .month-cell-fill {
+    background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(255,255,255,0.25) 50%,
+      transparent 100%);
+    background-size: 200% auto;
+    animation: shimmer 1.5s linear infinite;
+  }
+  /* 계절 색상 */
+  .season-winter .month-cell-bg,
+  .season-winter.past .month-cell-fill  { background: #7cb8e8; }
+  .season-winter.current .month-cell-fill { background: #7cb8e8; }
+  .season-spring .month-cell-bg,
+  .season-spring.past .month-cell-fill  { background: #7ec87a; }
+  .season-spring.current .month-cell-fill { background: #7ec87a; }
+  .season-summer .month-cell-bg,
+  .season-summer.past .month-cell-fill  { background: #f5c842; }
+  .season-summer.current .month-cell-fill { background: #f5c842; }
+  .season-autumn .month-cell-bg,
+  .season-autumn.past .month-cell-fill  { background: #e87842; }
+  .season-autumn.current .month-cell-fill { background: #e87842; }
+
+  /* 일 바 */
+  #day-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 140px;
+  }
+  #day-bar-label { font-size: 10px; color: #445; white-space: nowrap; }
+  #day-bar-bg {
+    flex: 1;
+    height: 8px;
+    background: #0a1020;
+    border-radius: 4px;
+    border: 1px solid #1a3050;
+    overflow: hidden;
+    min-width: 70px;
+  }
+  #day-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #e94560, #f5a623);
+    transition: width 0.35s ease;
+    box-shadow: 0 0 6px rgba(245,166,35,0.5);
+  }
+  #day-bar-text {
+    font-size: 10px;
+    color: #f5a623;
+    min-width: 36px;
+    text-align: right;
+  }
+  /* 년도 표시 */
+  #year-badge {
+    font-size: 11px;
+    color: #778;
+    white-space: nowrap;
+    padding: 0 6px;
+  }
+
+  /* ── M04/M05 관계도 & 캐릭터 ── */
+  .rel-bar-wrap { display:flex; align-items:center; gap:6px; padding:3px 0; }
+  .rel-label { font-size:11px; color:#8090a0; min-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .rel-bar-bg { flex:1; height:6px; background:#0a1020; border-radius:3px; overflow:hidden; border:1px solid #1a2a40; }
+  .rel-bar-fill { height:100%; border-radius:3px; transition:width 0.5s; }
+  .rel-value { font-size:10px; min-width:32px; text-align:right; font-weight:bold; }
+
+  .char-card {
+    background:#0f2040; border:1px solid #1a3a60; border-radius:6px;
+    padding:9px 11px; margin-bottom:8px;
+  }
+  .char-card-top { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .char-portrait {
+    width:36px; height:36px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:18px; flex-shrink:0; border:2px solid;
+  }
+  .char-main { flex:1; min-width:0; }
+  .char-name { font-weight:bold; font-size:13px; }
+  .char-role { font-size:10px; color:#6080a0; margin-top:1px; }
+  .char-age  { font-size:10px; color:#5070a0; }
+  .char-stats { display:flex; gap:6px; flex-wrap:wrap; margin-top:5px; }
+  .stat-chip {
+    padding:2px 7px; border-radius:8px; font-size:10px; font-weight:bold;
+    background:#0a1830; border:1px solid #1a3050;
+  }
+  .stat-chip span { color:#f5a623; }
+  .trait-list { display:flex; flex-wrap:wrap; gap:3px; margin-top:5px; }
+  .trait-badge {
+    padding:2px 7px; border-radius:10px; font-size:10px;
+    background:#1a2a40; color:#90b0d0; border:1px solid #2a4a60;
+  }
+  .trait-badge.positive { background:#1a2a1a; color:#6ecf8a; border-color:#2a4a2a; }
+  .trait-badge.negative { background:#2a1a1a; color:#cf6e6e; border-color:#4a2a2a; }
+
+  /* 알림 피드 */
+  #notif-feed {
+    position:absolute; bottom:8px; right:8px;
+    display:flex; flex-direction:column-reverse; gap:4px;
+    z-index:10; pointer-events:none; max-width:280px;
+  }
+  .notif-item {
+    background:rgba(15,30,60,0.92); border:1px solid #1a4a7a;
+    border-radius:5px; padding:5px 10px; font-size:11px; color:#c0d0e0;
+    animation: notifIn 0.3s ease, notifOut 0.5s ease 4.5s forwards;
+    border-left:3px solid #4a8aff;
+    line-height:1.4;
+  }
+  .notif-item.warn  { border-left-color:#f5a623; }
+  .notif-item.alert { border-left-color:#e94560; }
+  .notif-item.good  { border-left-color:#4ecf8a; }
+  @keyframes notifIn  { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:none} }
+  @keyframes notifOut { to{opacity:0;height:0;padding:0;margin:0;} }
+
+  /* 세력 패널 탭 */
+  .panel-tab-row { display:flex; gap:3px; margin-bottom:10px; }
+  .panel-tab {
+    flex:1; text-align:center; padding:4px 0; font-size:11px;
+    background:#0a1825; border:1px solid #1a3050; border-radius:3px;
+    cursor:pointer; color:#5070a0; transition:all 0.12s;
+  }
+  .panel-tab:hover { color:#a0c0e0; background:#0f2035; }
+  .panel-tab.active { background:#1a3a60; color:#fff; border-color:#3a6aaa; }
+
+  /* 스크롤바 전역 */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: #0f1a2e; }
+  ::-webkit-scrollbar-thumb { background: #1a3a60; }
+</style>
+</head>
+<body>
+
+<!-- ──────────────────────────────────────────
+     상단 컨트롤 바
+────────────────────────────────────────── -->
+<div id="topbar">
+  <div id="game-title">⚔ 대전략</div>
+  <div id="date-display">1200년 1월 1일</div>
+
+  <button id="pause-btn" class="ctrl-btn paused" onclick="GameCore.togglePause()" title="스페이스바">⏸</button>
+
+  <div class="ctrl-group">
+    <span style="color:#556;font-size:11px">배속</span>
+    <button class="ctrl-btn speed-btn active" data-speed="1" onclick="GameCore.setSpeed(1)">1×</button>
+    <button class="ctrl-btn speed-btn" data-speed="2" onclick="GameCore.setSpeed(2)">2×</button>
+    <button class="ctrl-btn speed-btn" data-speed="3" onclick="GameCore.setSpeed(3)">3×</button>
+    <button class="ctrl-btn speed-btn" data-speed="5" onclick="GameCore.setSpeed(5)">5×</button>
+  </div>
+
+  <div class="ctrl-group" style="margin-left:8px">
+    <span id="map-mode-label">맵 모드:</span>
+    <button class="map-mode-btn active" data-mode="political" onclick="MapRenderer.setMode('political')">정치</button>
+    <button class="map-mode-btn" data-mode="terrain" onclick="MapRenderer.setMode('terrain')">지형</button>
+    <button class="map-mode-btn" data-mode="population" onclick="MapRenderer.setMode('population')">인구</button>
+    <button class="map-mode-btn" data-mode="resources" onclick="MapRenderer.setMode('resources')">자원</button>
+  </div>
+
+  <div class="topbar-right">
+    <a id="editor-link" href="editor.html" target="_blank"
+       style="background:#0f3020;border:1px solid #2a7a4a;color:#6ecf9a;padding:5px 12px;border-radius:4px;font-size:12px;text-decoration:none;display:flex;align-items:center;gap:5px;transition:all 0.15s;"
+       onmouseover="this.style.background='#1a5030'" onmouseout="this.style.background='#0f3020'">
+      🗺 맵 에디터
+    </a>
+    <a id="progress-link" href="progress.html" target="_blank">📊 진척도</a>
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────────
+     타임바 (연도 진행, 월 진행, 일 진행)
+────────────────────────────────────────── -->
+<div id="timebar">
+  <span id="timebar-label">연도</span>
+  <div id="month-track"></div>
+  <span id="year-badge">1200년</span>
+  <div id="day-bar-wrap">
+    <span id="day-bar-label">일</span>
+    <div id="day-bar-bg"><div id="day-bar-fill" style="width:3%"></div></div>
+    <span id="day-bar-text">1/31</span>
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────────
+     메인 영역
+────────────────────────────────────────── -->
+<div id="main">
+
+  <!-- 맵 캔버스 -->
+  <div id="canvas-wrap">
+    <canvas id="gameCanvas"></canvas>
+    <div id="map-tooltip"></div>
+  </div>
+
+  <!-- 우측 사이드패널 -->
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <span id="sidebar-title-icon">🗺</span>
+      <span id="sidebar-title">프로빈스를 클릭하세요</span>
+    </div>
+    <div id="sidebar-body">
+      <div id="province-panel" style="display:none"></div>
+      <div id="faction-panel" style="display:none">
+        <div class="info-section">
+          <h4>세력 목록</h4>
+          <div id="faction-list"></div>
+        </div>
+      </div>
+      <div id="empty-hint">
+        <span class="hint-icon">🏰</span>
+        맵의 프로빈스를 클릭하면<br>상세 정보가 표시됩니다.<br><br>
+        <span style="color:#556;font-size:11px">우하단 F키 — 세력 목록</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 하단 상태바 -->
+<div id="statusbar">
+  <span id="status-date">1200.01.01</span>
+  <span id="status-speed">배속: 1×</span>
+  <span id="status-provinces">프로빈스: 0</span>
+  <span id="status-factions">세력: 0</span>
+  <span id="status-selected">선택: 없음</span>
+  <span id="status-faction-res" style="color:#f5a623;font-size:10px"></span>
+  <span style="margin-left:auto;color:#445">Phase 2 — M01+M02+M03+M04+M05</span>
+</div>
+
+
+<script>
+"use strict";
+
+/* ════════════════════════════════════════════════════════
+   M01 — GAME CORE
+   시간흐름, 배속, 일시정지, 이벤트버스, 게임상태
+════════════════════════════════════════════════════════ */
+const GameCore = (() => {
+
+  // ── 게임 날짜 시스템 ──
+  const DAYS_PER_MONTH = [31,28,31,30,31,30,31,31,30,31,30,31];
+  const MONTH_NAMES = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  // 1틱 = 하루. 1초(real) = speed × 틱
+  const TICK_MS = 1000; // 1배속 기준 하루=1초
+
+  let state = {
+    year: 1200, month: 1, day: 1,
+    totalDays: 0,
+    speed: 1,
+    paused: true,
+    tick: 0,
+  };
+
+  // ── 이벤트 버스 ──
+  const listeners = {};
+  function on(event, cb) {
+    (listeners[event] = listeners[event] || []).push(cb);
+  }
+  function emit(event, data) {
+    (listeners[event] || []).forEach(cb => cb(data));
+  }
+
+  // ── 시간 진행 ──
+  let lastTime = null;
+  let accumMs = 0;
+
+  function advanceDay() {
+    state.day++;
+    state.totalDays++;
+    const maxDay = DAYS_PER_MONTH[state.month - 1];
+    if (state.day > maxDay) {
+      state.day = 1;
+      state.month++;
+      emit('newMonth', { year: state.year, month: state.month });
+      if (state.month > 12) {
+        state.month = 1;
+        state.year++;
+        emit('newYear', { year: state.year });
+      }
+    }
+    emit('tick', { ...state });
+    updateDateUI();
+  }
+
+  function update(timestamp) {
+    requestAnimationFrame(update);
+    if (!lastTime) { lastTime = timestamp; return; }
+    const dt = timestamp - lastTime;
+    lastTime = timestamp;
+
+    if (!state.paused) {
+      accumMs += dt * state.speed;
+      while (accumMs >= TICK_MS) {
+        accumMs -= TICK_MS;
+        advanceDay();
+      }
+    }
+
+    // 맵 렌더
+    if (typeof MapRenderer !== 'undefined') MapRenderer.render();
+  }
+
+  function updateDateUI() {
+    const txt = `${state.year}년 ${MONTH_NAMES[state.month-1]} ${state.day}일`;
+    document.getElementById('date-display').textContent = txt;
+    document.getElementById('status-date').textContent =
+      `${state.year}.${String(state.month).padStart(2,'0')}.${String(state.day).padStart(2,'0')}`;
+    document.getElementById('status-speed').textContent =
+      state.paused ? '⏸ 일시정지' : `▶ 배속: ${state.speed}×`;
+  }
+
+  function togglePause() {
+    state.paused = !state.paused;
+    const btn = document.getElementById('pause-btn');
+    btn.textContent = state.paused ? '▶' : '⏸';
+    btn.classList.toggle('paused', state.paused);
+    updateDateUI();
+    emit('pauseChange', state.paused);
+  }
+
+  function setSpeed(s) {
+    state.speed = s;
+    document.querySelectorAll('.speed-btn').forEach(b => {
+      b.classList.toggle('active', parseInt(b.dataset.speed) === s);
+    });
+    updateDateUI();
+  }
+
+  function getState() { return { ...state }; }
+
+  function start() {
+    requestAnimationFrame(update);
+    // 키보드 단축키
+    document.addEventListener('keydown', e => {
+      if (e.target.tagName === 'INPUT') return;
+      if (e.code === 'Space') { e.preventDefault(); togglePause(); }
+      if (e.key === '1') setSpeed(1);
+      if (e.key === '2') setSpeed(2);
+      if (e.key === '3') setSpeed(3);
+      if (e.key === '5') setSpeed(5);
+      if (e.key === 'f' || e.key === 'F') UI.showFactionPanel();
+    });
+  }
+
+  return { start, togglePause, setSpeed, getState, on, emit };
+})();
+
+
+/* ════════════════════════════════════════════════════════
+   M03 — PROVINCE DATA
+   프로빈스 속성, 자원, 지형, 건물, 세력 정의
+════════════════════════════════════════════════════════ */
+const ProvinceManager = (() => {
+
+  // ── 세력 정의 ──
+  const FACTIONS = {
+    "고려": {
+      id: "고려", name: "고려국", color: "#2563c7",
+      ruler: "왕 건 2세", capital: 6,
+      description: "중원의 강국. 안정된 경제와 강한 관료제."
+    },
+    "북방부족": {
+      id: "북방부족", name: "북방 부족 연맹", color: "#8b4513",
+      ruler: "대칸 울루크", capital: 1,
+      description: "초원의 유목 전사들. 기병 중심 군사력."
+    },
+    "서방상인": {
+      id: "서방상인", name: "서방 상인 공화국", color: "#c6a800",
+      ruler: "집정관 해리스", capital: 4,
+      description: "교역으로 부를 쌓은 해안 도시국가."
+    },
+    "동방호족": {
+      id: "동방호족", name: "동방 호족 연합", color: "#1a8a5a",
+      ruler: "호족장 김동운", capital: 8,
+      description: "산악 지형에 적응한 독립적 호족들."
+    },
+    "남방": {
+      id: "남방", name: "남방 제후국", color: "#9b59b6",
+      ruler: "제후 이남해", capital: 12,
+      description: "비옥한 남부를 지배하는 제후들."
+    },
+    "미지": {
+      id: "미지", name: "미지의 땅", color: "#445566",
+      ruler: "—", capital: null,
+      description: "아직 확인되지 않은 지역."
+    }
+  };
+
+  // ── 지형 정의 ──
+  const TERRAINS = {
+    tundra:   { name: "동토", color: "#b8d4e8", icon: "🌨", taxMod: 0.3, defMod: 1.0 },
+    plains:   { name: "평원", color: "#8bc34a", icon: "🌾", taxMod: 1.2, defMod: 0.8 },
+    forest:   { name: "삼림", color: "#2e7d32", icon: "🌲", taxMod: 0.9, defMod: 1.3 },
+    mountain: { name: "산악", color: "#795548", icon: "⛰", taxMod: 0.6, defMod: 1.8 },
+    coast:    { name: "해안", color: "#26c6da", icon: "🌊", taxMod: 1.1, defMod: 0.9 },
+    hills:    { name: "구릉", color: "#a5d6a7", icon: "🏔", taxMod: 0.8, defMod: 1.4 },
+    swamp:    { name: "습지", color: "#66bb6a", icon: "🌿", taxMod: 0.5, defMod: 1.5 },
+    island:   { name: "섬",   color: "#80deea", icon: "🏝", taxMod: 0.9, defMod: 1.2 },
+  };
+
+  // ── 프로빈스 데이터 ──
+  // poly: 캔버스 좌표 폴리곤 (맵 크기에 맞게 설계)
+  // pickColor: 오프스크린 색상 피킹용 고유 색상
+  const PROVINCES_DATA = [
+    {
+      id: 1, name: "설원", faction: "북방부족",
+      terrain: "tundra",
+      resources: ["모피", "목재", "말"],
+      population: 42000,
+      buildings: ["교역소"],
+      development: 1,
+      pickColor: "#010000",
+      poly: [[0,0],[240,0],[260,100],[200,160],[120,180],[0,160]]
+    },
+    {
+      id: 2, name: "철령", faction: "북방부족",
+      terrain: "mountain",
+      resources: ["철광", "석재", "구리"],
+      population: 61000,
+      buildings: ["제련소", "요새"],
+      development: 2,
+      pickColor: "#020000",
+      poly: [[240,0],[460,0],[440,90],[380,130],[300,150],[260,100]]
+    },
+    {
+      id: 3, name: "북관", faction: "북방부족",
+      terrain: "plains",
+      resources: ["말", "곡물"],
+      population: 88000,
+      buildings: ["목장", "농장"],
+      development: 2,
+      pickColor: "#030000",
+      poly: [[460,0],[700,0],[680,80],[620,140],[520,160],[440,90]]
+    },
+    {
+      id: 4, name: "황해도", faction: "서방상인",
+      terrain: "coast",
+      resources: ["어류", "소금", "교역품"],
+      population: 130000,
+      buildings: ["항구", "교역소", "창고"],
+      development: 4,
+      pickColor: "#040000",
+      poly: [[0,160],[120,180],[100,280],[60,340],[0,360]]
+    },
+    {
+      id: 5, name: "서경", faction: "서방상인",
+      terrain: "plains",
+      resources: ["곡물", "교역품", "직물"],
+      population: 210000,
+      buildings: ["시장", "항구", "성벽", "교역소"],
+      development: 5,
+      pickColor: "#050000",
+      poly: [[120,180],[200,160],[280,190],[260,280],[180,300],[100,280]]
+    },
+    {
+      id: 6, name: "한성", faction: "고려",
+      terrain: "plains",
+      resources: ["곡물", "직물", "도자기"],
+      population: 380000,
+      buildings: ["왕궁", "성벽", "시장", "사원", "학당"],
+      development: 8,
+      pickColor: "#060000",
+      poly: [[200,160],[300,150],[380,130],[400,220],[360,290],[280,310],[260,280],[280,190]]
+    },
+    {
+      id: 7, name: "개성", faction: "고려",
+      terrain: "hills",
+      resources: ["인삼", "교역품", "도자기"],
+      population: 165000,
+      buildings: ["교역소", "시장", "성벽"],
+      development: 6,
+      pickColor: "#070000",
+      poly: [[60,340],[100,280],[180,300],[160,400],[80,420],[20,400]]
+    },
+    {
+      id: 8, name: "동경", faction: "동방호족",
+      terrain: "forest",
+      resources: ["목재", "사냥감", "약초"],
+      population: 94000,
+      buildings: ["목재소", "요새"],
+      development: 3,
+      pickColor: "#080000",
+      poly: [[520,160],[620,140],[680,80],[700,0],[820,0],[840,120],[760,180],[680,220],[600,230],[540,210]]
+    },
+    {
+      id: 9, name: "강원", faction: "동방호족",
+      terrain: "mountain",
+      resources: ["철광", "석재", "약초"],
+      population: 72000,
+      buildings: ["채굴장", "요새"],
+      development: 2,
+      pickColor: "#090000",
+      poly: [[380,130],[440,90],[520,160],[540,210],[480,250],[420,240],[400,220]]
+    },
+    {
+      id: 10, name: "변경", faction: "동방호족",
+      terrain: "hills",
+      resources: ["말", "모피", "사냥감"],
+      population: 55000,
+      buildings: ["변경초소"],
+      development: 2,
+      pickColor: "#0a0000",
+      poly: [[700,0],[900,0],[900,120],[840,120],[820,0]]
+    },
+    {
+      id: 11, name: "금강", faction: "고려",
+      terrain: "plains",
+      resources: ["곡물", "금", "도자기"],
+      population: 195000,
+      buildings: ["농장", "채굴장", "사원"],
+      development: 6,
+      pickColor: "#0b0000",
+      poly: [[160,400],[280,310],[360,290],[400,220],[420,240],[480,250],[460,360],[380,420],[260,440],[180,430]]
+    },
+    {
+      id: 12, name: "광주", faction: "남방",
+      terrain: "plains",
+      resources: ["곡물", "면화", "도자기"],
+      population: 178000,
+      buildings: ["농장", "시장", "성벽"],
+      development: 5,
+      pickColor: "#0c0000",
+      poly: [[80,420],[160,400],[180,430],[200,520],[120,540],[40,510],[20,440]]
+    },
+    {
+      id: 13, name: "전주", faction: "고려",
+      terrain: "plains",
+      resources: ["쌀", "곡물", "견직물"],
+      population: 220000,
+      buildings: ["농장", "농장", "창고", "사원"],
+      development: 7,
+      pickColor: "#0d0000",
+      poly: [[180,430],[260,440],[380,420],[400,520],[320,560],[200,560],[120,540],[200,520]]
+    },
+    {
+      id: 14, name: "남해", faction: "남방",
+      terrain: "coast",
+      resources: ["어류", "소금", "진주"],
+      population: 108000,
+      buildings: ["항구", "어항"],
+      development: 4,
+      pickColor: "#0e0000",
+      poly: [[200,560],[320,560],[400,520],[460,560],[420,620],[300,640],[160,620],[120,580]]
+    },
+    {
+      id: 15, name: "탐라", faction: "남방",
+      terrain: "island",
+      resources: ["귤", "말", "어류"],
+      population: 48000,
+      buildings: ["항구"],
+      development: 3,
+      pickColor: "#0f0000",
+      poly: [[320,680],[420,680],[440,740],[360,760],[280,740]]
+    },
+    {
+      id: 16, name: "동해안", faction: "동방호족",
+      terrain: "coast",
+      resources: ["어류", "소금", "목재"],
+      population: 86000,
+      buildings: ["항구", "교역소"],
+      development: 3,
+      pickColor: "#100000",
+      poly: [[760,180],[840,120],[900,120],[900,300],[820,280],[760,250],[680,220]]
+    },
+    {
+      id: 17, name: "남원", faction: "남방",
+      terrain: "hills",
+      resources: ["약초", "목재", "석재"],
+      population: 92000,
+      buildings: ["약재소", "목재소"],
+      development: 3,
+      pickColor: "#110000",
+      poly: [[380,420],[460,360],[540,380],[520,480],[440,520],[400,520]]
+    },
+    {
+      id: 18, name: "울산", faction: "동방호족",
+      terrain: "coast",
+      resources: ["철광", "어류", "교역품"],
+      population: 115000,
+      buildings: ["항구", "제련소", "성벽"],
+      development: 4,
+      pickColor: "#120000",
+      poly: [[480,250],[540,210],[600,230],[680,220],[760,250],[820,280],[900,300],[900,440],[820,420],[720,380],[620,340],[540,380],[460,360]]
+    },
+  ];
+
+  // 인덱스 구축
+  const byId = {};
+  const byPickColor = {};
+  PROVINCES_DATA.forEach(p => {
+    byId[p.id] = p;
+    byPickColor[p.pickColor] = p;
+  });
+
+  function getAll() { return PROVINCES_DATA; }
+  function getById(id) { return byId[id]; }
+  function getByPickColor(hex) { return byPickColor[hex] || null; }
+  function getFactions() { return FACTIONS; }
+  function getFaction(id) { return FACTIONS[id]; }
+  function getTerrain(id) { return TERRAINS[id]; }
+  function getTerrains() { return TERRAINS; }
+
+  function getFactionProvinces(factionId) {
+    return PROVINCES_DATA.filter(p => p.faction === factionId);
+  }
+
+  function getFactionPopulation(factionId) {
+    return getFactionProvinces(factionId).reduce((s, p) => s + p.population, 0);
+  }
+
+  // 상태바 업데이트
+  document.getElementById('status-provinces').textContent = `프로빈스: ${PROVINCES_DATA.length}`;
+  document.getElementById('status-factions').textContent = `세력: ${Object.keys(FACTIONS).length - 1}`;
+
+  return {
+    getAll, getById, getByPickColor,
+    getFactions, getFaction, getTerrain, getTerrains,
+    getFactionProvinces, getFactionPopulation
+  };
+})();
+
+
+/* ════════════════════════════════════════════════════════
+   M02 — MAP RENDERER
+   캔버스 렌더링, 색상 피킹, 클릭 감지, 맵 모드
+════════════════════════════════════════════════════════ */
+const MapRenderer = (() => {
+
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const tooltip = document.getElementById('map-tooltip');
+
+  // 오프스크린 피킹 캔버스
+  const pickCanvas = document.createElement('canvas');
+  const pickCtx = pickCanvas.getContext('2d', { willReadFrequently: true });
+
+  let currentMode = 'political';
+  let selectedId = null;
+  let hoveredId = null;
+  let needsRedraw = true;
+
+  // 맵 스케일/오프셋 (패닝 확장 가능)
+  let scale = 1.0;
+  let offsetX = 30;
+  let offsetY = 20;
+
+  // 인구 최대값 (색상 스케일용)
+  const maxPop = Math.max(...ProvinceManager.getAll().map(p => p.population));
+
+  function resize() {
+    const wrap = document.getElementById('canvas-wrap');
+    canvas.width = wrap.clientWidth;
+    canvas.height = wrap.clientHeight;
+    pickCanvas.width = canvas.width;
+    pickCanvas.height = canvas.height;
+    needsRedraw = true;
+    buildPickBuffer();
+  }
+
+  // ── 폴리곤 변환 ──
+  function transformedPoly(poly) {
+    return poly.map(([x, y]) => [x * scale + offsetX, y * scale + offsetY]);
+  }
+
+  // ── 폴리곤 그리기 헬퍼 ──
+  function drawPoly(context, poly, fill, stroke, lineWidth = 1) {
+    context.beginPath();
+    const tp = transformedPoly(poly);
+    context.moveTo(tp[0][0], tp[0][1]);
+    for (let i = 1; i < tp.length; i++) context.lineTo(tp[i][0], tp[i][1]);
+    context.closePath();
+    if (fill) { context.fillStyle = fill; context.fill(); }
+    if (stroke) {
+      context.strokeStyle = stroke;
+      context.lineWidth = lineWidth;
+      context.stroke();
+    }
+  }
+
+  // ── 폴리곤 중심점 ──
+  function polyCenter(poly) {
+    let x = 0, y = 0;
+    poly.forEach(([px, py]) => { x += px; y += py; });
+    return [x / poly.length * scale + offsetX, y / poly.length * scale + offsetY];
+  }
+
+  // ── 피킹 버퍼 구축 ──
+  function buildPickBuffer() {
+    pickCtx.clearRect(0, 0, pickCanvas.width, pickCanvas.height);
+    ProvinceManager.getAll().forEach(p => {
+      drawPoly(pickCtx, p.poly, p.pickColor, null);
+    });
+  }
+
+  // ── 맵 모드별 색상 계산 ──
+  function getProvinceColor(p) {
+    switch (currentMode) {
+      case 'political': {
+        const f = ProvinceManager.getFaction(p.faction);
+        return f ? f.color : '#445566';
+      }
+      case 'terrain': {
+        const t = ProvinceManager.getTerrain(p.terrain);
+        return t ? t.color : '#888';
+      }
+      case 'population': {
+        const ratio = p.population / maxPop;
+        const r = Math.round(255 * ratio);
+        const b = Math.round(255 * (1 - ratio));
+        return `rgb(${r},60,${b})`;
+      }
+      case 'resources': {
+        const dev = p.development;
+        const g = Math.min(255, 80 + dev * 22);
+        return `rgb(20,${g},40)`;
+      }
+      default: return '#445566';
+    }
+  }
+
+  // ── 메인 렌더 ──
+  function render() {
+    if (!needsRedraw) return;
+    needsRedraw = false;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 배경 (바다)
+    ctx.fillStyle = '#1a3a5c';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 바다 패턴
+    ctx.fillStyle = 'rgba(255,255,255,0.02)';
+    for (let x = 0; x < canvas.width; x += 40) {
+      for (let y = 0; y < canvas.height; y += 40) {
+        ctx.fillRect(x, y, 20, 1);
+      }
+    }
+
+    const provinces = ProvinceManager.getAll();
+
+    // 1단계: 프로빈스 채우기
+    provinces.forEach(p => {
+      const baseColor = getProvinceColor(p);
+      let fillColor = baseColor;
+
+      if (p.id === selectedId) {
+        // 선택된 프로빈스: 밝게
+        fillColor = lightenColor(baseColor, 40);
+      } else if (p.id === hoveredId) {
+        fillColor = lightenColor(baseColor, 20);
+      }
+
+      drawPoly(ctx, p.poly, fillColor, null);
+    });
+
+    // 2단계: 테두리
+    provinces.forEach(p => {
+      const isSelected = p.id === selectedId;
+      const strokeColor = isSelected ? '#fff' : 'rgba(0,0,0,0.6)';
+      const lineW = isSelected ? 2.5 : 0.8;
+      drawPoly(ctx, p.poly, null, strokeColor, lineW);
+    });
+
+    // 3단계: 선택 하이라이트 (점선 외곽)
+    if (selectedId) {
+      const p = ProvinceManager.getById(selectedId);
+      if (p) {
+        ctx.save();
+        ctx.setLineDash([6, 4]);
+        drawPoly(ctx, p.poly, null, '#ffdd44', 2);
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+    }
+
+    // 4단계: 레이블
+    provinces.forEach(p => {
+      const [cx, cy] = polyCenter(p.poly);
+      // 화면 안에 있을 때만
+      if (cx < 0 || cx > canvas.width || cy < 0 || cy > canvas.height) return;
+
+      ctx.save();
+      ctx.font = `bold ${Math.max(9, 11 * scale)}px 'Malgun Gothic', sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // 그림자
+      ctx.fillStyle = 'rgba(0,0,0,0.8)';
+      ctx.fillText(p.name, cx + 1, cy + 1);
+
+      // 텍스트
+      ctx.fillStyle = p.id === selectedId ? '#ffdd44' : '#ffffff';
+      ctx.fillText(p.name, cx, cy);
+
+      // 개발도 점
+      if (scale > 0.8) {
+        const devStr = '●'.repeat(Math.min(p.development, 8));
+        ctx.font = `${Math.max(7, 8 * scale)}px serif`;
+        ctx.fillStyle = '#ffcc44';
+        ctx.fillText(devStr, cx, cy + 12 * scale);
+      }
+      ctx.restore();
+    });
+
+    // 5단계: 세력 영역 레이블 (정치 모드)
+    if (currentMode === 'political' && scale > 0.8) {
+      // 세력별 중심 프로빈스에 세력명 표시
+    }
+
+    // 6단계: 탐라 섬 연결 힌트 선
+    ctx.save();
+    ctx.setLineDash([4, 8]);
+    ctx.strokeStyle = 'rgba(200,220,255,0.2)';
+    ctx.lineWidth = 1;
+    const tamra = ProvinceManager.getById(15);
+    const nambae = ProvinceManager.getById(14);
+    if (tamra && nambae) {
+      const [tx, ty] = polyCenter(tamra.poly);
+      const [nx, ny] = polyCenter(nambae.poly);
+      ctx.beginPath();
+      ctx.moveTo(tx, ty);
+      ctx.lineTo(nx, ny);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // 맵 모드 워터마크
+    ctx.save();
+    ctx.font = '11px Malgun Gothic';
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.textAlign = 'left';
+    ctx.fillText(getModeLabel(), 8, canvas.height - 8);
+    ctx.restore();
+  }
+
+  function getModeLabel() {
+    const labels = { political:'정치 지도', terrain:'지형 지도', population:'인구 지도', resources:'자원 지도' };
+    return labels[currentMode] || '';
+  }
+
+  // ── 색상 유틸 ──
+  function lightenColor(hex, amount) {
+    // hex #rrggbb
+    const r = parseInt(hex.slice(1,3), 16);
+    const g = parseInt(hex.slice(3,5), 16);
+    const b = parseInt(hex.slice(5,7), 16);
+    return `rgb(${Math.min(255,r+amount)},${Math.min(255,g+amount)},${Math.min(255,b+amount)})`;
+  }
+
+  // ── 픽셀 → 프로빈스 ──
+  function provinceAtPixel(x, y) {
+    const pixel = pickCtx.getImageData(x, y, 1, 1).data;
+    const hex = '#' + [pixel[0],pixel[1],pixel[2]].map(v => v.toString(16).padStart(2,'0')).join('');
+    return ProvinceManager.getByPickColor(hex);
+  }
+
+  // ── 이벤트 ──
+  canvas.addEventListener('click', e => {
+    const rect = canvas.getBoundingClientRect();
+    const p = provinceAtPixel(e.clientX - rect.left, e.clientY - rect.top);
+    if (p) {
+      selectedId = p.id;
+      document.getElementById('status-selected').textContent = `선택: ${p.name}`;
+      UI.showProvince(p);
+    } else {
+      selectedId = null;
+      document.getElementById('status-selected').textContent = '선택: 없음';
+      UI.clearProvince();
+    }
+    needsRedraw = true;
+  });
+
+  canvas.addEventListener('mousemove', e => {
+    const rect = canvas.getBoundingClientRect();
+    const p = provinceAtPixel(e.clientX - rect.left, e.clientY - rect.top);
+    const newHovered = p ? p.id : null;
+    if (newHovered !== hoveredId) {
+      hoveredId = newHovered;
+      needsRedraw = true;
+    }
+    if (p) {
+      const f = ProvinceManager.getFaction(p.faction);
+      tooltip.style.display = 'block';
+      tooltip.style.left = (e.clientX - rect.left + 14) + 'px';
+      tooltip.style.top = (e.clientY - rect.top - 10) + 'px';
+      tooltip.textContent = `${p.name} — ${f ? f.name : '?'} | ${ProvinceManager.getTerrain(p.terrain).name} | 인구 ${p.population.toLocaleString()}`;
+    } else {
+      tooltip.style.display = 'none';
+    }
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    hoveredId = null;
+    tooltip.style.display = 'none';
+    needsRedraw = true;
+  });
+
+  // 마우스 휠 줌
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    const newScale = Math.max(0.5, Math.min(3.0, scale * delta));
+    // 마우스 위치 기준 줌
+    offsetX = mx - (mx - offsetX) * (newScale / scale);
+    offsetY = my - (my - offsetY) * (newScale / scale);
+    scale = newScale;
+    needsRedraw = true;
+    buildPickBuffer();
+  }, { passive: false });
+
+  // 드래그 패닝
+  let dragging = false, dragStartX, dragStartY;
+  canvas.addEventListener('mousedown', e => {
+    if (e.button === 2) { dragging = true; dragStartX = e.clientX - offsetX; dragStartY = e.clientY - offsetY; }
+  });
+  canvas.addEventListener('mousemove', e => {
+    if (dragging) {
+      offsetX = e.clientX - dragStartX;
+      offsetY = e.clientY - dragStartY;
+      needsRedraw = true;
+      buildPickBuffer();
+    }
+  });
+  canvas.addEventListener('mouseup', () => { dragging = false; });
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+  function setMode(mode) {
+    currentMode = mode;
+    document.querySelectorAll('.map-mode-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.mode === mode);
+    });
+    needsRedraw = true;
+  }
+
+  function markDirty() { needsRedraw = true; }
+
+  function init() {
+    resize();
+    window.addEventListener('resize', () => { resize(); });
+    GameCore.on('tick', () => { needsRedraw = true; });
+  }
+
+  return { render, setMode, markDirty, init };
+})();
+
+
+/* ════════════════════════════════════════════════════════
+   UI — 사이드패널 (M04/M05 통합)
+════════════════════════════════════════════════════════ */
+const UI = (() => {
+
+  const TERRAIN_COLORS = {
+    tundra:'#8abcdc', plains:'#6aab3a', forest:'#2e7d32',
+    mountain:'#8d6e63', coast:'#26c6da', hills:'#81c784',
+    swamp:'#66bb6a', island:'#4dd0e1'
+  };
+  const BUILDING_ICONS = {
+    '교역소':'🏪','항구':'⚓','요새':'🏰','성벽':'🧱','시장':'🏬',
+    '농장':'🌾','목장':'🐎','채굴장':'⛏','제련소':'🔥','사원':'⛩',
+    '창고':'📦','학당':'📚','목재소':'🪓','어항':'🎣','약재소':'🌿',
+    '변경초소':'👁','왕궁':'👑'
+  };
+  const STAT_ICONS = { martial:'⚔', diplomacy:'🕊', stewardship:'💰', intrigue:'🕵' };
+  const STAT_KO    = { martial:'무력', diplomacy:'외교', stewardship:'행정', intrigue:'음모' };
+
+  // ── 공통 헬퍼 ──
+  function setHeader(icon, title) {
+    document.getElementById('sidebar-title-icon').textContent = icon;
+    document.getElementById('sidebar-title').textContent = title;
+  }
+  function hideAll() {
+    document.getElementById('empty-hint').style.display = 'none';
+    document.getElementById('province-panel').style.display = 'none';
+    document.getElementById('faction-panel').style.display = 'none';
+  }
+  function showEmpty() {
+    setHeader('🗺','프로빈스를 클릭하세요');
+    document.getElementById('empty-hint').style.display = 'block';
+    document.getElementById('province-panel').style.display = 'none';
+    document.getElementById('faction-panel').style.display = 'none';
+  }
+
+  // ── 캐릭터 카드 HTML ──
+  function charCardHTML(char) {
+    if (!char) return '<div style="color:#445;font-size:11px;padding:4px">—</div>';
+    const stats = CharacterManager.getEffectiveStats(char);
+    const roleLabel = { ruler:'군주', heir:'후계자', general:'장군', advisor:'참모', consort:'배우자' };
+    const portraits = { ruler:'👑', heir:'🎖', general:'⚔', advisor:'📜', consort:'💒' };
+    const fDef = ProvinceManager.getFaction(char.faction);
+    const borderColor = fDef ? fDef.color : '#334';
+
+    const traitsHTML = char.traits.map(t => {
+      const def = CharacterManager.getTrait(t);
+      const cls = def ? `trait-badge ${def.type}` : 'trait-badge';
+      return `<span class="${cls}" title="${def?.desc||''}">${def?.icon||''} ${t}</span>`;
+    }).join('');
+
+    const statsHTML = Object.keys(STAT_ICONS).map(k =>
+      `<span class="stat-chip" title="${STAT_KO[k]}">${STAT_ICONS[k]}<span>${stats[k]||0}</span></span>`
+    ).join('');
+
+    const spouseChar = char.married_to ? CharacterManager.getById(char.married_to) : null;
+    const spouseLine = spouseChar
+      ? `<div style="font-size:10px;color:#5a7a9a;margin-top:3px">💒 ${spouseChar.name}</div>` : '';
+
+    return `
+      <div class="char-card">
+        <div class="char-card-top">
+          <div class="char-portrait" style="border-color:${borderColor};background:${borderColor}22">
+            ${portraits[char.role]||'👤'}
+          </div>
+          <div class="char-main">
+            <div class="char-name">${char.name}</div>
+            <div class="char-role">${roleLabel[char.role]||char.role} · ${char.dynasty}</div>
+            <div class="char-age">나이 ${char.age}세</div>
+            ${spouseLine}
+          </div>
+        </div>
+        <div class="char-stats">${statsHTML}</div>
+        <div class="trait-list">${traitsHTML}</div>
+      </div>`;
+  }
+
+  // ── 관계도 바 ──
+  function relBarHTML(factionId, otherId) {
+    const val = FactionManager.getRelation(factionId, otherId);
+    const lbl = FactionManager.getRelationLabel(val);
+    const fDef = ProvinceManager.getFaction(otherId);
+    const name = fDef ? fDef.name : otherId;
+    const pct = Math.round(((val + 100) / 200) * 100);
+    const fillColor = val >= 0 ? '#4ecf8a' : '#e94560';
+    return `
+      <div class="rel-bar-wrap">
+        <span class="rel-label" title="${name}">${name}</span>
+        <div class="rel-bar-bg">
+          <div class="rel-bar-fill" style="width:${pct}%;background:${fillColor}"></div>
+        </div>
+        <span class="rel-value" style="color:${lbl.color}">${lbl.text}</span>
+      </div>`;
+  }
+
+  // ── 프로빈스 패널 ──
+  function showProvince(p) {
+    const f  = ProvinceManager.getFaction(p.faction);
+    const t  = ProvinceManager.getTerrain(p.terrain);
+    const tc = TERRAIN_COLORS[p.terrain] || '#888';
+    const fs = FactionManager.getFactionState(p.faction);
+    const ruler = CharacterManager.getRuler(p.faction);
+
+    hideAll();
+    setHeader(t.icon, p.name);
+    const panel = document.getElementById('province-panel');
+    panel.style.display = 'block';
+
+    const { income } = FactionManager.calcMonthlyIncome(p.faction);
+
+    panel.innerHTML = `
+      <div class="panel-tab-row">
+        <div class="panel-tab active" onclick="UI._switchProvTab(this,'prov-basic')">기본</div>
+        <div class="panel-tab" onclick="UI._switchProvTab(this,'prov-faction')">세력</div>
+        <div class="panel-tab" onclick="UI._switchProvTab(this,'prov-ruler')">군주</div>
+      </div>
+
+      <!-- 기본 정보 탭 -->
+      <div id="prov-basic">
+        <div class="info-section">
+          <h4>기본 정보</h4>
+          <div class="info-row"><span class="label">지형</span>
+            <span class="value"><span class="terrain-badge" style="background:${tc}22;color:${tc};border:1px solid ${tc}44">${t.icon} ${t.name}</span></span></div>
+          <div class="info-row"><span class="label">지배 세력</span>
+            <span class="value"><span class="faction-dot" style="background:${f?f.color:'#555'}"></span>${f?f.name:'미지'}</span></div>
+          <div class="info-row"><span class="label">인구</span>
+            <span class="value">${p.population.toLocaleString()}명</span></div>
+          <div class="info-row"><span class="label">개발도</span>
+            <span class="value">${'★'.repeat(p.development)}${'☆'.repeat(Math.max(0,8-p.development))} (${p.development}/8)</span></div>
+          <div class="info-row"><span class="label">세금 보정</span>
+            <span class="value">×${t.taxMod.toFixed(1)}</span></div>
+          <div class="info-row"><span class="label">방어 보정</span>
+            <span class="value">×${t.defMod.toFixed(1)}</span></div>
+        </div>
+        <div class="info-section">
+          <h4>자원</h4>
+          <div style="padding:4px 0">${p.resources.map(r=>`<span class="resource-tag">⬡ ${r}</span>`).join('')||'없음'}</div>
+        </div>
+        <div class="info-section">
+          <h4>건물 (${p.buildings.length})</h4>
+          ${p.buildings.map(b=>`<div class="building-item"><span class="building-icon">${BUILDING_ICONS[b]||'🔹'}</span><span>${b}</span></div>`).join('')||'<div style="color:#445;font-size:11px">없음</div>'}
+        </div>
+      </div>
+
+      <!-- 세력 탭 -->
+      <div id="prov-faction" style="display:none">
+        ${f && fs ? `
+        <div class="info-section">
+          <h4>${f.name}</h4>
+          <div style="color:#7090a0;font-size:11px;line-height:1.6;margin-bottom:8px">${f.description}</div>
+          <div class="info-row"><span class="label">총 프로빈스</span><span class="value">${ProvinceManager.getFactionProvinces(p.faction).length}개</span></div>
+          <div class="info-row"><span class="label">총 인구</span><span class="value">${(ProvinceManager.getFactionPopulation(p.faction)/10000).toFixed(0)}만명</span></div>
+          <div class="info-row"><span class="label">💰 금화</span><span class="value" style="color:#f5a623">${fs.gold.toLocaleString()}</span></div>
+          <div class="info-row"><span class="label">📈 월수입</span><span class="value" style="color:#4ecf8a">+${fs.income}</span></div>
+          <div class="info-row"><span class="label">📉 월지출</span><span class="value" style="color:#e94560">-${fs.expenses}</span></div>
+          <div class="info-row"><span class="label">⭐ 위신</span><span class="value">${fs.prestige.toFixed(0)}/100</span></div>
+          <div class="info-row"><span class="label">🏛 안정도</span><span class="value">${fs.stability.toFixed(0)}/100</span></div>
+        </div>
+        <div class="info-section">
+          <h4>타 세력 관계도</h4>
+          ${Object.keys(ProvinceManager.getFactions()).filter(fid=>fid!==p.faction&&fid!=='미지').map(fid=>relBarHTML(p.faction,fid)).join('')}
+        </div>` : '<div style="color:#445;padding:12px">세력 정보 없음</div>'}
+      </div>
+
+      <!-- 군주 탭 -->
+      <div id="prov-ruler" style="display:none">
+        <div class="info-section">
+          <h4>현 군주</h4>
+          ${charCardHTML(ruler)}
+        </div>
+        <div class="info-section">
+          <h4>후계자</h4>
+          ${charCardHTML(CharacterManager.getHeir(p.faction))}
+        </div>
+      </div>
+    `;
+  }
+
+  // ── 탭 전환 ──
+  function _switchProvTab(btn, targetId) {
+    const panel = document.getElementById('province-panel');
+    panel.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    ['prov-basic','prov-faction','prov-ruler'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = id === targetId ? 'block' : 'none';
+    });
+  }
+
+  // ── 세력 목록 패널 ──
+  function showFactionPanel() {
+    hideAll();
+    setHeader('⚔','세력 목록');
+    const panel = document.getElementById('faction-panel');
+    panel.style.display = 'block';
+
+    const factions = ProvinceManager.getFactions();
+    const list = document.getElementById('faction-list');
+    list.innerHTML = '';
+
+    Object.values(factions).filter(f => f.id !== '미지').forEach(f => {
+      const provs = ProvinceManager.getFactionProvinces(f.id);
+      const pop   = ProvinceManager.getFactionPopulation(f.id);
+      const fs    = FactionManager.getFactionState(f.id);
+      const ruler = CharacterManager.getRuler(f.id);
+
+      const item = document.createElement('div');
+      item.className = 'faction-item';
+      item.style.flexDirection = 'column';
+      item.style.alignItems = 'flex-start';
+      item.style.gap = '5px';
+      item.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;width:100%">
+          <div class="faction-color-bar" style="background:${f.color}"></div>
+          <div class="faction-info" style="flex:1">
+            <div class="faction-name" style="color:${f.color}">${f.name}</div>
+            <div class="faction-stats">${ruler?ruler.name:'?'} | 프로빈스 ${provs.length}개 | ${(pop/10000).toFixed(0)}만명</div>
+          </div>
+          ${fs ? `<div style="text-align:right;font-size:10px;color:#5a7a6a">
+            💰${fs.gold.toLocaleString()}<br>
+            <span style="color:${fs.income-fs.expenses>=0?'#4ecf8a':'#e94560'}">${fs.income-fs.expenses>=0?'+':''}${(fs.income-fs.expenses).toFixed(0)}/월</span>
+          </div>` : ''}
+        </div>
+        ${fs ? `<div style="display:flex;gap:6px;width:100%;padding-left:12px">
+          <div style="flex:1">
+            <div style="font-size:9px;color:#445;margin-bottom:2px">위신 ${fs.prestige.toFixed(0)}</div>
+            <div style="height:4px;background:#0a1020;border-radius:2px;overflow:hidden">
+              <div style="width:${fs.prestige}%;height:100%;background:#f5a623;border-radius:2px"></div>
+            </div>
+          </div>
+          <div style="flex:1">
+            <div style="font-size:9px;color:#445;margin-bottom:2px">안정도 ${fs.stability.toFixed(0)}</div>
+            <div style="height:4px;background:#0a1020;border-radius:2px;overflow:hidden">
+              <div style="width:${fs.stability}%;height:100%;background:${fs.stability>50?'#4ecf8a':'#e94560'};border-radius:2px"></div>
+            </div>
+          </div>
+        </div>` : ''}
+      `;
+      item.addEventListener('click', () => {
+        if (f.capital) {
+          const cap = ProvinceManager.getById(f.capital);
+          if (cap) showProvince(cap);
+        }
+      });
+      list.appendChild(item);
+    });
+  }
+
+  function clearProvince() { showEmpty(); }
+
+  return { showProvince, clearProvince, showFactionPanel, _switchProvTab };
+})();
+
+
+/* ════════════════════════════════════════════════════════
+   TIMEBAR — 타임바 렌더러
+   월별 계절 셀 + 일 진행바 + 연도 배지
+════════════════════════════════════════════════════════ */
+const TimeBar = (() => {
+  const DAYS_PER_MONTH = [31,28,31,30,31,30,31,31,30,31,30,31];
+  const MONTH_SHORT    = ['1월','2월','3월','4월','5월','6월',
+                          '7월','8월','9월','10월','11월','12월'];
+  // 계절: 겨울(12,1,2) 봄(3,4,5) 여름(6,7,8) 가을(9,10,11)
+  const SEASON = ['winter','winter','spring','spring','spring',
+                  'summer','summer','summer','autumn','autumn','autumn','winter'];
+
+  const track    = document.getElementById('month-track');
+  const dayFill  = document.getElementById('day-bar-fill');
+  const dayText  = document.getElementById('day-bar-text');
+  const yearBadge = document.getElementById('year-badge');
+
+  // 셀 12개 미리 생성
+  const cells = [];
+  for (let i = 0; i < 12; i++) {
+    const cell = document.createElement('div');
+    cell.className = `month-cell season-${SEASON[i]}`;
+    cell.title = MONTH_SHORT[i];
+    cell.innerHTML = `
+      <div class="month-cell-bg"></div>
+      <div class="month-cell-fill"></div>
+      <div class="month-cell-label">${MONTH_SHORT[i]}</div>
+    `;
+    track.appendChild(cell);
+    cells.push(cell);
+  }
+
+  function update(state) {
+    const { year, month, day } = state;
+    yearBadge.textContent = `${year}년`;
+
+    for (let i = 0; i < 12; i++) {
+      const m = i + 1; // 1~12
+      const cell = cells[i];
+      const fill = cell.querySelector('.month-cell-fill');
+
+      cell.classList.remove('past', 'current', 'future');
+
+      if (m < month) {
+        // 지난 달: 100% 채움
+        cell.classList.add('past');
+        fill.style.width = '100%';
+        fill.style.opacity = '0.6';
+        fill.style.animation = 'none';
+        fill.style.background = '';
+      } else if (m === month) {
+        // 현재 달: day/days % 채움
+        const days = DAYS_PER_MONTH[i];
+        const pct  = Math.round((day / days) * 100);
+        cell.classList.add('current');
+        fill.style.width = pct + '%';
+        fill.style.opacity = '1';
+        // 현재 달은 CSS animation이 적용됨 (shimmer)
+        fill.style.animation = '';
+        fill.style.background = '';
+      } else {
+        // 미래 달: 0%
+        cell.classList.add('future');
+        fill.style.width = '0%';
+        fill.style.opacity = '0';
+        fill.style.animation = 'none';
+      }
+    }
+
+    // 일 진행바
+    const maxDay = DAYS_PER_MONTH[month - 1];
+    const pct    = Math.max(3, Math.round((day / maxDay) * 100));
+    dayFill.style.width = pct + '%';
+    dayText.textContent = `${day}/${maxDay}`;
+  }
+
+  return { update };
+})();
+
+
+/* ════════════════════════════════════════════════════════
+   M04 — FACTION MANAGER
+   세력 자원(금/위신/안정도), 관계도, 영향권, 월별 틱
+════════════════════════════════════════════════════════ */
+const FactionManager = (() => {
+
+  // ── 세력별 초기 자원 ──
+  const FACTION_STATE = {
+    "고려":    { gold:850, prestige:72, stability:68, income:0, expenses:0 },
+    "북방부족":{ gold:320, prestige:58, stability:55, income:0, expenses:0 },
+    "서방상인":{ gold:1100,prestige:65, stability:70, income:0, expenses:0 },
+    "동방호족":{ gold:430, prestige:50, stability:60, income:0, expenses:0 },
+    "남방":    { gold:560, prestige:55, stability:62, income:0, expenses:0 },
+  };
+
+  // ── 초기 관계도 ── (-100 ~ +100)
+  // 양쪽 다 설정 불필요, getRelation()이 대칭으로 처리
+  const RELATIONS = {
+    "고려|북방부족":  -35,
+    "고려|서방상인":   20,
+    "고려|동방호족":   10,
+    "고려|남방":       30,
+    "북방부족|서방상인":-10,
+    "북방부족|동방호족": 5,
+    "북방부족|남방":   -20,
+    "서방상인|동방호족": 15,
+    "서방상인|남방":    25,
+    "동방호족|남방":    10,
+  };
+
+  // ── 관계도 접근 ──
+  function relKey(a, b) {
+    return [a, b].sort().join('|');
+  }
+  function getRelation(a, b) {
+    return RELATIONS[relKey(a, b)] ?? 0;
+  }
+  function modRelation(a, b, delta) {
+    const k = relKey(a, b);
+    RELATIONS[k] = Math.max(-100, Math.min(100, (RELATIONS[k] ?? 0) + delta));
+  }
+  function getRelationLabel(val) {
+    if (val >=  60) return { text:'동맹',   color:'#4ecf8a' };
+    if (val >=  25) return { text:'우호',   color:'#8bc34a' };
+    if (val >=  -10) return { text:'중립',  color:'#90a0b0' };
+    if (val >= -40) return { text:'경계',   color:'#f5a623' };
+    return               { text:'적대',     color:'#e94560' };
+  }
+
+  // ── 월 수입 계산 ──
+  const BASE_INCOME_PER_DEV = 8;   // 개발도 1당 금/월
+  const EXPENSE_PER_PROVINCE = 12; // 프로빈스 유지비
+
+  function calcMonthlyIncome(factionId) {
+    const provs = ProvinceManager.getFactionProvinces(factionId);
+    let income = 0;
+    provs.forEach(p => {
+      const t = ProvinceManager.getTerrain(p.terrain);
+      income += p.development * BASE_INCOME_PER_DEV * t.taxMod;
+      // 건물 보너스
+      if (p.buildings.includes('시장'))    income += 20;
+      if (p.buildings.includes('교역소'))  income += 15;
+      if (p.buildings.includes('항구'))    income += 18;
+      if (p.buildings.includes('창고'))    income += 10;
+    });
+    const expenses = provs.length * EXPENSE_PER_PROVINCE;
+    return { income: Math.round(income), expenses };
+  }
+
+  function onMonthTick() {
+    const factions = ProvinceManager.getFactions();
+    Object.keys(FACTION_STATE).forEach(fid => {
+      if (!factions[fid]) return;
+      const s = FACTION_STATE[fid];
+      const { income, expenses } = calcMonthlyIncome(fid);
+      s.income   = income;
+      s.expenses = expenses;
+      s.gold     = Math.round(s.gold + income - expenses);
+      // 안정도 영향: 적자면 하락
+      if (income < expenses) s.stability = Math.max(0, s.stability - 0.5);
+      else s.stability = Math.min(100, s.stability + 0.2);
+      // 위신: 점진 회복
+      s.prestige = Math.min(100, s.prestige + 0.1);
+    });
+    // 관계도 자연 드리프트 (중립으로)
+    Object.keys(RELATIONS).forEach(k => {
+      RELATIONS[k] = RELATIONS[k] > 0
+        ? Math.max(0, RELATIONS[k] - 0.3)
+        : Math.min(0, RELATIONS[k] + 0.2);
+    });
+    refreshStatusBar();
+  }
+
+  function getFactionState(id) {
+    return FACTION_STATE[id] ? { ...FACTION_STATE[id] } : null;
+  }
+
+  function getAllFactionStates() { return FACTION_STATE; }
+
+  function refreshStatusBar() {
+    // 관찰자 모드 — 고려 기준 표시
+    const s = FACTION_STATE['고려'];
+    if (!s) return;
+    document.getElementById('status-faction-res').textContent =
+      `고려: 💰${s.gold.toLocaleString()}  위신${s.prestige.toFixed(0)}  안정${s.stability.toFixed(0)}`;
+  }
+
+  return {
+    getRelation, modRelation, getRelationLabel,
+    getFactionState, getAllFactionStates,
+    calcMonthlyIncome, onMonthTick,
+  };
+})();
+
+
+/* ════════════════════════════════════════════════════════
+   M05 — CHARACTER MANAGER
+   특성, 통치자/후계자, 나이 진행, 사망/계승
+════════════════════════════════════════════════════════ */
+const CharacterManager = (() => {
+
+  // ── 특성 정의 ──
+  const TRAIT_DEFS = {
+    용맹한:   { type:'positive', icon:'⚔', desc:'전투 보정 +15%', effects:{ martial:3 } },
+    비겁한:   { type:'negative', icon:'😰', desc:'전투 보정 -15%', effects:{ martial:-3 } },
+    지략가:   { type:'positive', icon:'🎯', desc:'군사 행동 이점',  effects:{ martial:2, stewardship:1 } },
+    외교관:   { type:'positive', icon:'🕊', desc:'관계도 +10',     effects:{ diplomacy:3 } },
+    탐욕스러운:{ type:'negative', icon:'💰', desc:'세금+, 관계-',  effects:{ stewardship:2, diplomacy:-2 } },
+    현명한:   { type:'positive', icon:'📜', desc:'모든 능력치 +1', effects:{ martial:1, diplomacy:1, stewardship:1, intrigue:1 } },
+    잔인한:   { type:'negative', icon:'🩸', desc:'안정도 하락',    effects:{ martial:2, diplomacy:-3 } },
+    인자한:   { type:'positive', icon:'❤', desc:'민심 상승',      effects:{ diplomacy:2, stewardship:-1 } },
+    청렴한:   { type:'positive', icon:'⚖', desc:'세금 효율 +',    effects:{ stewardship:2, diplomacy:1 } },
+    교활한:   { type:'negative', icon:'🕵', desc:'음모에 능함',    effects:{ intrigue:3, diplomacy:-1 } },
+    노련한:   { type:'positive', icon:'🏅', desc:'경험 보너스',    effects:{ martial:1, stewardship:1 } },
+    병약한:   { type:'negative', icon:'🤒', desc:'조기 사망 위험', effects:{ martial:-1 } },
+  };
+
+  // ── 초기 캐릭터 로스터 ──
+  let characters = [
+    // 고려
+    { id:1,  name:'왕 건 2세',   faction:'고려',     role:'ruler', age:42, dynasty:'왕씨',
+      traits:['현명한','외교관'], stats:{martial:8,diplomacy:14,stewardship:11,intrigue:6}, married_to:2 },
+    { id:2,  name:'왕비 류씨',   faction:'고려',     role:'consort',age:36, dynasty:'류씨',
+      traits:['인자한'],          stats:{martial:3,diplomacy:10,stewardship:8,intrigue:5},  married_to:1 },
+    { id:3,  name:'왕자 왕성',   faction:'고려',     role:'heir',  age:18, dynasty:'왕씨',
+      traits:['용맹한'],          stats:{martial:11,diplomacy:6,stewardship:7,intrigue:4},  married_to:null },
+    { id:4,  name:'대장군 최충', faction:'고려',     role:'general',age:55, dynasty:'최씨',
+      traits:['지략가','노련한'], stats:{martial:15,diplomacy:5,stewardship:7,intrigue:8},  married_to:null },
+
+    // 북방부족
+    { id:5,  name:'대칸 울루크', faction:'북방부족', role:'ruler', age:38, dynasty:'울씨',
+      traits:['용맹한','잔인한'],  stats:{martial:16,diplomacy:4,stewardship:6,intrigue:7},  married_to:null },
+    { id:6,  name:'부칸 테무르', faction:'북방부족', role:'heir',  age:20, dynasty:'울씨',
+      traits:['용맹한'],           stats:{martial:13,diplomacy:5,stewardship:5,intrigue:4},  married_to:null },
+
+    // 서방상인
+    { id:7,  name:'집정관 해리스',faction:'서방상인',role:'ruler', age:51, dynasty:'해씨',
+      traits:['탐욕스러운','교활한'], stats:{martial:5,diplomacy:10,stewardship:17,intrigue:14}, married_to:8 },
+    { id:8,  name:'부인 마르셀라',faction:'서방상인',role:'consort',age:44, dynasty:'마씨',
+      traits:['외교관'],            stats:{martial:2,diplomacy:12,stewardship:9,intrigue:6},   married_to:7 },
+    { id:9,  name:'상단장 카림', faction:'서방상인', role:'heir',  age:29, dynasty:'해씨',
+      traits:['청렴한'],            stats:{martial:6,diplomacy:8,stewardship:14,intrigue:7},   married_to:null },
+
+    // 동방호족
+    { id:10, name:'호족장 김동운',faction:'동방호족',role:'ruler', age:47, dynasty:'김씨',
+      traits:['지략가','노련한'],   stats:{martial:12,diplomacy:8,stewardship:9,intrigue:10},  married_to:null },
+    { id:11, name:'장남 김무철', faction:'동방호족', role:'heir',  age:23, dynasty:'김씨',
+      traits:['용맹한'],            stats:{martial:10,diplomacy:6,stewardship:7,intrigue:5},   married_to:null },
+
+    // 남방
+    { id:12, name:'제후 이남해', faction:'남방',     role:'ruler', age:61, dynasty:'이씨',
+      traits:['현명한','병약한'],   stats:{martial:6,diplomacy:11,stewardship:13,intrigue:9},  married_to:null },
+    { id:13, name:'세자 이대풍', faction:'남방',     role:'heir',  age:32, dynasty:'이씨',
+      traits:['인자한','외교관'],   stats:{martial:7,diplomacy:13,stewardship:10,intrigue:6},  married_to:null },
+  ];
+
+  let nextCharId = 20;
+
+  // ── 접근자 ──
+  function getAll()                { return characters; }
+  function getById(id)             { return characters.find(c => c.id === id); }
+  function getByFaction(fid)       { return characters.filter(c => c.faction === fid); }
+  function getRuler(fid)           { return characters.find(c => c.faction === fid && c.role === 'ruler'); }
+  function getHeir(fid)            { return characters.find(c => c.faction === fid && c.role === 'heir'); }
+  function getTrait(name)          { return TRAIT_DEFS[name]; }
+  function getAllTraits()           { return TRAIT_DEFS; }
+
+  // ── 능력치 합산 (특성 반영) ──
+  function getEffectiveStats(char) {
+    const s = { ...char.stats };
+    char.traits.forEach(t => {
+      const def = TRAIT_DEFS[t];
+      if (!def) return;
+      Object.entries(def.effects).forEach(([k, v]) => { s[k] = (s[k] || 0) + v; });
+    });
+    return s;
+  }
+
+  // ── 연령 진행 (매 게임 연도) ──
+  function onYearTick() {
+    characters.forEach(c => { c.age++; });
+    checkDeaths();
+  }
+
+  // ── 사망 체크 ──
+  function checkDeaths() {
+    const dead = [];
+    characters = characters.filter(c => {
+      if (c.role === 'ruler' || c.role === 'heir' || c.role === 'general') {
+        let deathChance = 0;
+        if (c.age >= 75) deathChance = 0.25;
+        else if (c.age >= 65) deathChance = 0.10;
+        else if (c.age >= 55) deathChance = 0.04;
+        else if (c.age >= 45) deathChance = 0.015;
+        else deathChance = 0.005;
+        if (c.traits.includes('병약한')) deathChance *= 2.5;
+        if (Math.random() < deathChance) {
+          dead.push(c);
+          return false;
+        }
+      }
+      return true;
+    });
+
+    dead.forEach(c => {
+      if (c.role === 'ruler') {
+        Notifications.push(`⚠ ${c.faction}: ${c.name} 붕어 (향년 ${c.age}세)`, 'alert');
+        succeedRuler(c.faction);
+      } else if (c.role === 'heir') {
+        Notifications.push(`⚠ ${c.faction}: 후계자 ${c.name} 사망`, 'warn');
+      } else {
+        Notifications.push(`${c.faction}: ${c.name} 사망 (${c.age}세)`, '');
+      }
+    });
+  }
+
+  // ── 군주 계승 ──
+  function succeedRuler(factionId) {
+    const heir = getHeir(factionId);
+    if (heir) {
+      heir.role = 'ruler';
+      Notifications.push(`✓ ${factionId}: ${heir.name} 즉위`, 'good');
+      // 새 후계자 자동 생성 (간략)
+      const newHeir = generateHeir(factionId, heir);
+      characters.push(newHeir);
+    } else {
+      // 후계자 없음 → 안정도 큰 타격
+      const fs = FactionManager.getAllFactionStates()[factionId];
+      if (fs) fs.stability = Math.max(0, fs.stability - 30);
+      Notifications.push(`⚠ ${factionId}: 후계자 없음! 안정도 대폭 하락`, 'alert');
+      // 임시 후계자 임명
+      const newRuler = generateRuler(factionId);
+      characters.push(newRuler);
+    }
+  }
+
+  function generateHeir(factionId, parent) {
+    const factions = ProvinceManager.getFactions();
+    const f = factions[factionId];
+    const id = nextCharId++;
+    const traitPool = Object.keys(TRAIT_DEFS);
+    const traits = [traitPool[Math.floor(Math.random() * traitPool.length)]];
+    return {
+      id, name: `${parent.dynasty} 세자`, faction: factionId, role: 'heir',
+      age: Math.floor(Math.random() * 10) + 10, dynasty: parent.dynasty,
+      traits, stats: {
+        martial:    Math.floor(Math.random()*8)+5,
+        diplomacy:  Math.floor(Math.random()*8)+5,
+        stewardship:Math.floor(Math.random()*8)+5,
+        intrigue:   Math.floor(Math.random()*6)+3,
+      }, married_to: null,
+    };
+  }
+
+  function generateRuler(factionId) {
+    const id = nextCharId++;
+    const factions = ProvinceManager.getFactions();
+    const f = factions[factionId];
+    return {
+      id, name: `신군주`, faction: factionId, role: 'ruler',
+      age: 30 + Math.floor(Math.random()*15),
+      dynasty: '신왕조',
+      traits: ['현명한'],
+      stats: { martial:8, diplomacy:8, stewardship:8, intrigue:5 },
+      married_to: null,
+    };
+  }
+
+  // ── 혼인 ──
+  function marry(charId1, charId2) {
+    const c1 = getById(charId1), c2 = getById(charId2);
+    if (!c1 || !c2) return false;
+    if (c1.faction !== c2.faction) {
+      FactionManager.modRelation(c1.faction, c2.faction, 15);
+      Notifications.push(`💒 ${c1.name} ↔ ${c2.name} 혼인 동맹`, 'good');
+    }
+    c1.married_to = charId2;
+    c2.married_to = charId1;
+    return true;
+  }
+
+  return {
+    getAll, getById, getByFaction, getRuler, getHeir,
+    getTrait, getAllTraits, getEffectiveStats,
+    onYearTick, marry,
+  };
+})();
+
+
+/* ════════════════════════════════════════════════════════
+   NOTIFICATIONS — 알림 피드 (맵 우하단)
+════════════════════════════════════════════════════════ */
+const Notifications = (() => {
+  let feed = null;
+
+  function init() {
+    feed = document.createElement('div');
+    feed.id = 'notif-feed';
+    document.getElementById('canvas-wrap').appendChild(feed);
+  }
+
+  function push(msg, type = '') {
+    if (!feed) return;
+    const el = document.createElement('div');
+    el.className = 'notif-item' + (type ? ` ${type}` : '');
+    el.textContent = msg;
+    feed.prepend(el);
+    setTimeout(() => el.remove(), 5500);
+    // 최대 5개 유지
+    while (feed.children.length > 5) feed.lastChild.remove();
+  }
+
+  return { init, push };
+})();
+
+
+/* ════════════════════════════════════════════════════════
+   초기화
+════════════════════════════════════════════════════════ */
+window.addEventListener('load', () => {
+  MapRenderer.init();
+  Notifications.init();
+  GameCore.start();
+
+  // 타임바
+  GameCore.on('tick',     s  => TimeBar.update(s));
+  TimeBar.update(GameCore.getState());
+
+  // M04: 매월 경제 틱
+  GameCore.on('newMonth', () => FactionManager.onMonthTick());
+  // M05: 매년 캐릭터 나이 진행
+  GameCore.on('newYear',  s  => {
+    CharacterManager.onYearTick();
+    Notifications.push(`📅 ${s.year}년이 시작되었습니다`);
+  });
+
+  // 초기 경제 계산
+  FactionManager.onMonthTick();
+
+  // 초기 세력 패널
+  setTimeout(() => UI.showFactionPanel(), 100);
+});
+</script>
+</body>
+</html>
