@@ -190,7 +190,7 @@ const MilitaryManager = (() => {
   // ── 전투력 계산 ──
   /**
    * 사단/주둔군 전투력 계산.
-   * = Σ(unit.count × unitType.power) × (1 + martial × 0.03)
+   * = Σ(unit.count × unitType.power) × (1 + martial × 0.05)
    */
   function calcDivisionPower(units, factionId, provinceId) {
     let power = 0;
