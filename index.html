@@ -1623,12 +1623,45 @@ const ProvinceManager = (() => {
     },
   ];
 
+  // ── 구역(Zone) 시스템 상수 ──
+  const ZONE_NAMES = { core: '중심부', east: '동', west: '서', south: '남', north: '북' };
+  const CORE_BUILDINGS = ['왕궁', '행정관청'];
+  const ZONE_BUILDINGS_BY_TERRAIN = {
+    plains:   ['농장', '곡창', '목장'],
+    mountain: ['광산', '제련소', '요새'],
+    coast:    ['항구', '조선소', '등대'],
+    forest:   ['목재소', '사냥터', '약초원'],
+    tundra:   ['목재소', '사냥터', '망루'],
+    hills:    ['목장', '포도원', '소규모 요새'],
+    swamp:    ['어촌', '소금밭', '수로'],
+    city:     ['시장', '교역소', '도서관'],
+    island:   ['항구', '조선소', '등대'],
+    desert:   ['카라반 기지', '저수지', '망루'],
+  };
+  const ZONE_BUILDING_INCOME = {
+    '농장': 8, '곡창': 12, '목장': 10,
+    '광산': 15, '제련소': 20, '요새': 5,
+    '항구': 18, '조선소': 25, '등대': 8,
+    '목재소': 12, '사냥터': 8, '약초원': 10,
+    '카라반 기지': 15, '저수지': 6, '망루': 4,
+    '포도원': 10, '소규모 요새': 5,
+    '어촌': 10, '소금밭': 12, '수로': 8,
+    '시장': 20, '교역소': 18, '도서관': 6,
+    '왕궁': 30, '행정관청': 20,
+  };
+  const ZONE_BUILDING_COST = 150;
+
   // 인덱스 구축
   const byId = {};
   const byPickColor = {};
   PROVINCES_DATA.forEach(p => {
     byId[p.id] = p;
     byPickColor[p.pickColor] = p;
+    // 구역 초기화 (최초 1회) — ZONE_NAMES 키에서 자동 생성
+    if (!p.zones) {
+      p.zones = {};
+      Object.keys(ZONE_NAMES).forEach(zk => { p.zones[zk] = { building: null }; });
+    }
   });
 
   function getAll() { return PROVINCES_DATA; }
@@ -1651,11 +1684,12 @@ const ProvinceManager = (() => {
   document.getElementById('status-provinces').textContent = `프로빈스: ${PROVINCES_DATA.length}`;
   document.getElementById('status-factions').textContent = `세력: ${Object.keys(FACTIONS).length - 1}`;
 
-  /** 프로빈스 가변 속성 직렬화 (faction, development, buildings, population) */
+  /** 프로빈스 가변 속성 직렬화 (faction, development, buildings, population, zones) */
   function saveState() {
     return PROVINCES_DATA.map(p => ({
       id: p.id, faction: p.faction,
-      development: p.development, buildings: [...p.buildings], population: p.population
+      development: p.development, buildings: [...p.buildings], population: p.population,
+      zones: p.zones ? JSON.parse(JSON.stringify(p.zones)) : undefined,
     }));
   }
 
@@ -1669,13 +1703,58 @@ const ProvinceManager = (() => {
       if (saved.development !== undefined) p.development  = saved.development;
       if (saved.buildings   !== undefined) p.buildings    = [...saved.buildings];
       if (saved.population  !== undefined) p.population   = saved.population;
+      if (saved.zones       !== undefined) {
+        // zones 복원 (각 zone 키를 순회하여 안전하게 병합)
+        Object.keys(saved.zones).forEach(zk => {
+          if (p.zones[zk]) p.zones[zk] = { ...saved.zones[zk] };
+        });
+      }
     });
+  }
+
+  // ── 구역 건물 관련 함수 ──
+
+  /** 특정 구역에 건설 가능한 건물 목록 반환 */
+  function getBuildingsForZone(province, zone) {
+    if (zone === 'core') return CORE_BUILDINGS;
+    return ZONE_BUILDINGS_BY_TERRAIN[province.terrain] || [];
+  }
+
+  /** 구역에 건물 건설 (성공 시 true) */
+  function buildInZone(provinceId, zone, building) {
+    const p = byId[provinceId];
+    if (!p || !p.zones || !p.zones[zone]) return false;
+    if (p.zones[zone].building) return false; // 이미 건물 있음
+    const allowed = getBuildingsForZone(p, zone);
+    if (!allowed.includes(building)) return false;
+    p.zones[zone].building = building;
+    return true;
+  }
+
+  /** 구역 건물 철거 */
+  function demolishZone(provinceId, zone) {
+    const p = byId[provinceId];
+    if (!p || !p.zones || !p.zones[zone]) return false;
+    p.zones[zone].building = null;
+    return true;
+  }
+
+  /** 구역 건물로부터 월 수입 합산 */
+  function getZoneIncome(province) {
+    if (!province.zones) return 0;
+    let income = 0;
+    Object.values(province.zones).forEach(z => {
+      if (z.building) income += (ZONE_BUILDING_INCOME[z.building] || 0);
+    });
+    return income;
   }
 
   return {
     getAll, getById, getByPickColor,
     getFactions, getFaction, getTerrain, getTerrains,
     getFactionProvinces, getFactionPopulation,
+    getBuildingsForZone, buildInZone, demolishZone, getZoneIncome,
+    ZONE_NAMES, ZONE_BUILDING_COST, ZONE_BUILDING_INCOME,
     saveState, loadState,
   };
 })();
@@ -2077,6 +2156,8 @@ const MapRenderer = (() => {
 
   // ── 이벤트 ──
   canvas.addEventListener('click', e => {
+    // 고무밴드 드래그 직후의 click 이벤트는 선택 초기화 방지를 위해 무시
+    if (typeof MilitaryUI !== 'undefined' && MilitaryUI.consumeDragEnd()) return;
     const rect = canvas.getBoundingClientRect();
     const p = provinceAtPixel(e.clientX - rect.left, e.clientY - rect.top);
     if (typeof MilitaryUI !== 'undefined' && MilitaryUI.isActive()) {
@@ -2297,6 +2378,104 @@ const UI = (() => {
       </div>`;
   }
 
+  // ── 구역 탭 HTML 생성 ──
+  function _zoneTabHTML(p) {
+    if (!p.zones) return '<div style="color:#445;padding:12px">구역 데이터 없음</div>';
+    const zoneNames = ProvinceManager.ZONE_NAMES;
+    const cost = ProvinceManager.ZONE_BUILDING_COST;
+    const isPlayerProv = p.faction === '고려';
+    const fs = FactionManager.getFactionState('고려');
+    const gold = fs ? Math.floor(fs.gold) : 0;
+    const zoneIncome = ProvinceManager.getZoneIncome(p);
+    const zoneKeys = ['core', 'east', 'west', 'south', 'north'];
+
+    let html = `<div class="info-section">
+      <h4>🏗 구역 건설</h4>
+      <div class="info-row"><span class="label">구역 수입</span><span class="value" style="color:#4ecf8a">+${zoneIncome}💰/월</span></div>
+      ${!isPlayerProv ? '<div style="color:#888;font-size:11px;padding:4px 0">※ 자국 영토만 건설 가능</div>' : ''}
+    </div>`;
+
+    zoneKeys.forEach(zk => {
+      const zone = p.zones[zk];
+      const zoneName = zoneNames[zk] || zk;
+      const avail = ProvinceManager.getBuildingsForZone(p, zk);
+      const income = zone.building ? (ProvinceManager.ZONE_BUILDING_INCOME[zone.building] || 0) : 0;
+
+      html += `<div class="info-section" style="padding:6px 8px;margin-bottom:4px;border:1px solid #1a2535;border-radius:4px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:11px;font-weight:bold;color:#8aabcc">${zoneName}</span>
+          ${zone.building
+            ? `<span style="font-size:10px;color:#4ecf8a">+${income}💰/월</span>`
+            : '<span style="font-size:10px;color:#445">비어있음</span>'}
+        </div>`;
+
+      if (zone.building) {
+        html += `<div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:11px;color:#c8d8e8">🏛 ${zone.building}</span>
+          ${isPlayerProv
+            ? `<button onclick="UI._zoneAction(${p.id},'demolish','${zk}',null)" style="font-size:10px;padding:2px 6px;background:#3a1a1a;border:1px solid #6a2a2a;color:#e94560;border-radius:3px;cursor:pointer">철거</button>`
+            : ''}
+        </div>`;
+      } else if (isPlayerProv && avail.length > 0) {
+        const selectId = `zone-sel-${p.id}-${zk}`;
+        const canAfford = gold >= cost;
+        html += `<div style="display:flex;align-items:center;gap:4px">
+          <select id="${selectId}" style="flex:1;font-size:10px;background:#0d1a2a;color:#c8d8e8;border:1px solid #1e3048;border-radius:3px;padding:2px">
+            <option value="">건물 선택...</option>
+            ${avail.map(b => `<option value="${b}">${b} (+${ProvinceManager.ZONE_BUILDING_INCOME[b]||0}💰)</option>`).join('')}
+          </select>
+          <button onclick="UI._zoneAction(${p.id},'build','${zk}',document.getElementById('${selectId}').value)"
+            style="font-size:10px;padding:2px 6px;background:${canAfford?'#1a3a2a':'#1a1a1a'};border:1px solid ${canAfford?'#2a6a4a':'#333'};color:${canAfford?'#4ecf8a':'#556'};border-radius:3px;cursor:${canAfford?'pointer':'not-allowed'}"
+            ${canAfford?'':'disabled'}>
+            건설(${cost}💰)
+          </button>
+        </div>`;
+      }
+
+      html += `</div>`;
+    });
+
+    return html;
+  }
+
+  // ── 구역 건물 액션 (전역 접근 가능) ──
+  function _zoneAction(provinceId, action, zone, building) {
+    const p = ProvinceManager.getById(provinceId);
+    if (!p || p.faction !== '고려') return;
+    const fs = FactionManager.getFactionState('고려');
+    if (!fs) return;
+
+  // 구역 탭으로 복귀하는 헬퍼
+  function _restoreZoneTab() {
+    setTimeout(() => {
+      const tabs = document.querySelectorAll('#province-panel .panel-tab');
+      tabs.forEach(t => {
+        if (t.textContent.trim() === '구역') UI._switchProvTab(t, 'prov-zones');
+      });
+    }, 0);
+  }
+
+    if (action === 'build') {
+      if (!building) { Notifications.push('건물을 선택하세요', 'warn'); return; }
+      if (fs.gold < ProvinceManager.ZONE_BUILDING_COST) {
+        Notifications.push(`💰 금화 부족 — 건설 비용: ${ProvinceManager.ZONE_BUILDING_COST}`, 'warn');
+        return;
+      }
+      if (ProvinceManager.buildInZone(provinceId, zone, building)) {
+        FactionManager.addGold('고려', -ProvinceManager.ZONE_BUILDING_COST);
+        Notifications.push(`🏛 ${p.name} ${ProvinceManager.ZONE_NAMES[zone]}: ${building} 건설 완료`, 'good');
+        showProvince(p);
+        _restoreZoneTab();
+      }
+    } else if (action === 'demolish') {
+      if (ProvinceManager.demolishZone(provinceId, zone)) {
+        Notifications.push(`🗑 ${p.name} ${ProvinceManager.ZONE_NAMES[zone]}: 건물 철거`, '');
+        showProvince(p);
+        _restoreZoneTab();
+      }
+    }
+  }
+
   // ── 프로빈스 패널 ──
   function showProvince(p) {
     const f  = ProvinceManager.getFaction(p.faction);
@@ -2315,6 +2494,7 @@ const UI = (() => {
     panel.innerHTML = `
       <div class="panel-tab-row">
         <div class="panel-tab active" onclick="UI._switchProvTab(this,'prov-basic')">기본</div>
+        <div class="panel-tab" onclick="UI._switchProvTab(this,'prov-zones')">구역</div>
         <div class="panel-tab" onclick="UI._switchProvTab(this,'prov-faction')">세력</div>
         <div class="panel-tab" onclick="UI._switchProvTab(this,'prov-ruler')">군주</div>
       </div>
@@ -2364,6 +2544,11 @@ const UI = (() => {
         })()}
       </div>
 
+      <!-- 구역 건설 탭 -->
+      <div id="prov-zones" style="display:none">
+        ${_zoneTabHTML(p)}
+      </div>
+
       <!-- 세력 탭 -->
       <div id="prov-faction" style="display:none">
         ${f && fs ? `
@@ -2403,7 +2588,7 @@ const UI = (() => {
     const panel = document.getElementById('province-panel');
     panel.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
     btn.classList.add('active');
-    ['prov-basic','prov-faction','prov-ruler'].forEach(id => {
+    ['prov-basic','prov-zones','prov-faction','prov-ruler'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.style.display = id === targetId ? 'block' : 'none';
     });
@@ -2573,7 +2758,7 @@ const UI = (() => {
       </div>`;
   }
 
-  return { showProvince, clearProvince, showFactionPanel, showBattleDetail, _switchProvTab };
+  return { showProvince, clearProvince, showFactionPanel, showBattleDetail, _switchProvTab, _zoneAction };
 })();
 
 
@@ -2716,11 +2901,15 @@ const FactionManager = (() => {
     provs.forEach(p => {
       const t = ProvinceManager.getTerrain(p.terrain);
       income += p.development * BASE_INCOME_PER_DEV * t.taxMod;
-      // 건물 보너스
+      // 기존 건물 보너스
       if (p.buildings.includes('시장'))    income += 20;
       if (p.buildings.includes('교역소'))  income += 15;
       if (p.buildings.includes('항구'))    income += 18;
       if (p.buildings.includes('창고'))    income += 10;
+      // 구역 건물 수입
+      if (typeof ProvinceManager.getZoneIncome === 'function') {
+        income += ProvinceManager.getZoneIncome(p);
+      }
     });
     const expenses = provs.length * EXPENSE_PER_PROVINCE;
     return { income: Math.round(income), expenses };
@@ -3447,6 +3636,12 @@ const CombatEngine = (() => {
     if (ruler) {
       const stats = CharacterManager.getEffectiveStats(ruler);
       power *= (1 + (stats.martial || 0) * MilitaryManager.getMartialBonus());
+    }
+    // 기술 연구 보너스 (전투력 / 방어력)
+    if (typeof TechManager !== 'undefined') {
+      const tb = TechManager.getBonuses(factionId);
+      if (tb.combatBonus)              power *= (1 + tb.combatBonus);
+      if (isDefender && tb.defenseBonus) power *= (1 + tb.defenseBonus);
     }
     return Math.max(1, power);
   }
@@ -6138,12 +6333,12 @@ const TechManager = (() => {
   const _researched = {};
   // 진행 중인 연구: { factionId → { techId, progress, required } }
   const _inProgress = {};
-  // 누적 경제 보너스: { factionId → { incomeBonus: number } }
+  // 누적 경제/전투 보너스: { factionId → { incomeBonus, combatBonus, defenseBonus } }
   const _bonuses = {};
 
   function _ensureFaction(factionId) {
     if (!_researched[factionId]) _researched[factionId] = new Set();
-    if (!_bonuses[factionId])    _bonuses[factionId]    = { incomeBonus: 0 };
+    if (!_bonuses[factionId])    _bonuses[factionId]    = { incomeBonus: 0, combatBonus: 0, defenseBonus: 0 };
   }
 
   function getAllTechs() { return TECH_TREE; }
@@ -6214,6 +6409,12 @@ const TechManager = (() => {
       if (tech.effect.goldBonus)   FactionManager.addGold(factionId, tech.effect.goldBonus);
       if (tech.effect.incomeBonus) {
         _bonuses[factionId].incomeBonus = (_bonuses[factionId].incomeBonus || 0) + tech.effect.incomeBonus;
+      }
+      if (tech.effect.combatBonus) {
+        _bonuses[factionId].combatBonus = (_bonuses[factionId].combatBonus || 0) + tech.effect.combatBonus;
+      }
+      if (tech.effect.defenseBonus) {
+        _bonuses[factionId].defenseBonus = (_bonuses[factionId].defenseBonus || 0) + tech.effect.defenseBonus;
       }
     }
 
@@ -6347,6 +6548,9 @@ const TechTreeModal = (() => {
     const gold = st ? Math.floor(st.gold || 0) : 0;
     let html = '';
 
+    /** 소수 보너스 값을 퍼센트 문자열로 변환 (예: 0.12 → '12%') */
+    const pctBonus = v => `${Math.round(v * 100)}%`;
+
     // 전체 기술 이름 맵 (id → name) — 다중 선행 표시에 사용
     const techNameMap = {};
     for (const cat of Object.values(allTech)) {
@@ -6386,6 +6590,8 @@ const TechTreeModal = (() => {
         if (tech.effect.stability)   effectParts.push(`+${tech.effect.stability} 안정`);
         if (tech.effect.prestige)    effectParts.push(`+${tech.effect.prestige} 위신`);
         if (tech.effect.goldBonus)   effectParts.push(`+${tech.effect.goldBonus}💰`);
+        if (tech.effect.combatBonus)  effectParts.push(`+${pctBonus(tech.effect.combatBonus)} 전투`);
+        if (tech.effect.defenseBonus) effectParts.push(`+${pctBonus(tech.effect.defenseBonus)} 방어`);
 
         html += `<div class="${cardClass}" ${clickAttr}>`;
         if (done) html += `<div class="tt-card-check">✓</div>`;
@@ -6421,6 +6627,19 @@ const TechTreeModal = (() => {
     }
 
     document.getElementById('tech-tree-content').innerHTML = html;
+
+    // 현재 적용 중인 보너스 요약 표시
+    const bonuses = TechManager.getBonuses(factionId);
+    const bonusParts = [];
+    if (bonuses.incomeBonus > 0)  bonusParts.push(`💰 +${bonuses.incomeBonus}/월 수입`);
+    if (bonuses.combatBonus > 0)  bonusParts.push(`⚔ +${pctBonus(bonuses.combatBonus)} 전투력`);
+    if (bonuses.defenseBonus > 0) bonusParts.push(`🛡 +${pctBonus(bonuses.defenseBonus)} 방어력`);
+    const bonusBanner = document.getElementById('tt-active-bonuses');
+    if (bonusBanner) {
+      bonusBanner.textContent = bonusParts.length > 0
+        ? '✅ 적용 중: ' + bonusParts.join(' · ')
+        : '연구 보너스 없음 — 기술을 연구하면 효과가 자동 적용됩니다';
+    }
   }
 
   function refresh() {
@@ -6918,6 +7137,7 @@ const MilitaryUI = (() => {
   let _selectedDivIds = [];
   let _dragStart = null;
   let _dragRect = null;
+  let _justDragged = false; // 드래그 직후 click 이벤트 무시용
 
   // ── 군사 모드 토글 ──
   function toggleMode() {
@@ -7210,6 +7430,9 @@ const MilitaryUI = (() => {
       if (_selectedDivIds.length > 0) {
         Notifications.push(`✔ ${_selectedDivIds.length}개 사단 선택됨 — 우클릭으로 이동 명령`, '');
       }
+      _justDragged = true; // click 이벤트가 뒤따라 오면 무시하도록 표시
+      // 안전 타임아웃: click이 오지 않아도 100ms 후 자동 리셋
+      setTimeout(() => { _justDragged = false; }, 100);
       _dragRect = null;
       _dragStart = null;
       _showMilitaryPanel();
@@ -7221,10 +7444,17 @@ const MilitaryUI = (() => {
     }
   });
 
+  /** 드래그 직후 click 이벤트를 소비하여 선택 초기화 방지 */
+  function consumeDragEnd() {
+    if (_justDragged) { _justDragged = false; return true; }
+    return false;
+  }
+
   return {
     toggleMode, isActive, getSelectedDivId, getSelectedDivIds, getDragRect,
     handleProvinceClick, handleRightClick, selectDivision,
     recruitDivision, disbandSelected, cancelSelection,
+    consumeDragEnd,
     refreshPanel: _showMilitaryPanel,
   };
 })();
@@ -7316,6 +7546,7 @@ window.addEventListener('load', () => {
       <span>🔬 기술 연구</span>
       <button id="tech-tree-close" onclick="TechTreeModal.close()">✕</button>
     </div>
+    <div id="tt-active-bonuses" style="padding:6px 14px;font-size:11px;color:#4ecf8a;background:#0a1520;border-bottom:1px solid #1e3048"></div>
     <div id="tech-tree-content"></div>
     <div id="tech-tree-legend">
       <span class="ttl-item locked">■ 연구 불가</span>
