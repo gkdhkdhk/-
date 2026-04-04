@@ -4422,7 +4422,7 @@ const ActionPanels = (() => {
         const atWar = WarSystem.isAtWar('고려', f);
         if (atWar) {
           return `
-            <button class="ap-action-btn" style="border-color:#4ecf8a" onclick="WarSystem.makepeace('고려','${f}');ActionPanels.openDiplomacy()">
+            <button class="ap-action-btn" style="border-color:#4ecf8a" onclick="WarSystem.makePeace('고려','${f}');ActionPanels.openDiplomacy()">
               <span>🕊</span> ${f}와 평화 협정
               <span class="btn-cost">관계 +10</span>
             </button>
@@ -4581,7 +4581,7 @@ const WarSystem = (() => {
     AlertSystem.refresh();
   }
 
-  function makepeace(attackerId, defenderId) {
+  function makePeace(attackerId, defenderId) {
     activeWars = activeWars.filter(w => !(w.attackerId === attackerId && w.defenderId === defenderId));
     if (FactionManager.modRelation) FactionManager.modRelation(attackerId, defenderId, 10);
     Notifications.push(`🕊 ${attackerId}와 ${defenderId}가 평화 협정을 맺었습니다`, 'good');
@@ -4596,10 +4596,13 @@ const WarSystem = (() => {
     );
   }
 
-  return { declareWar, tryOccupy, makepeace, getActiveWars, isAtWar };
+  return { declareWar, tryOccupy, makePeace, getActiveWars, isAtWar };
 })();
 
 window.addEventListener('load', () => {
+  MapRenderer.init();
+  Notifications.init();
+  GameCore.start();
 
   // 타임바
   GameCore.on('tick',     s  => TimeBar.update(s));
