@@ -714,6 +714,140 @@
   padding: 3px 10px;
   border-radius: 4px;
 }
+
+/* ── Alert Tray (패러독스 스타일 할 일 알림) ── */
+#alert-tray {
+  position: fixed;
+  top: 84px;
+  left: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 20;
+}
+.alert-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(10, 20, 40, 0.92);
+  border: 1px solid #2a4a7a;
+  border-radius: 5px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  color: #c0d0e0;
+  transition: all 0.15s;
+  white-space: nowrap;
+  backdrop-filter: blur(4px);
+  animation: slideIn 0.2s ease;
+  min-width: 120px;
+}
+.alert-btn:hover {
+  background: rgba(30, 60, 120, 0.95);
+  border-color: #5a9aca;
+  color: #fff;
+  transform: translateX(3px);
+}
+.alert-btn .ab-icon { font-size: 14px; }
+.alert-btn .ab-text { flex: 1; line-height: 1.3; }
+.alert-btn .ab-count {
+  background: #e94560;
+  color: #fff;
+  border-radius: 8px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: bold;
+}
+.alert-btn.priority-high { border-color: #e94560; }
+.alert-btn.priority-high .ab-icon { filter: drop-shadow(0 0 4px #e94560); }
+.alert-btn.priority-medium { border-color: #f5a623; }
+.alert-btn.priority-low { border-color: #4a8aff; }
+@keyframes slideIn { from{opacity:0;transform:translateX(-20px)} to{opacity:1;transform:none} }
+
+/* ── Action Panel (슬라이드인 모달) ── */
+#action-panel-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+#action-panel {
+  position: absolute;
+  right: 310px;
+  top: 84px;
+  width: 340px;
+  max-height: calc(100vh - 120px);
+  background: #14203a;
+  border: 1px solid #2a5a8a;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  pointer-events: all;
+  box-shadow: -4px 4px 24px rgba(0,0,0,0.5);
+  animation: panelSlideIn 0.2s ease;
+}
+@keyframes panelSlideIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:none} }
+#action-panel-header {
+  background: #0f2a40;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #1a3a60;
+}
+#action-panel-icon { font-size: 18px; }
+#action-panel-title { flex: 1; font-weight: bold; color: #f5a623; font-size: 14px; }
+#action-panel-close {
+  background: none; border: none; color: #556; cursor: pointer;
+  font-size: 16px; padding: 0 4px;
+}
+#action-panel-close:hover { color: #e94560; }
+#action-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+}
+.ap-section { margin-bottom: 14px; }
+.ap-section-title {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+  color: #f5a623; border-bottom: 1px solid #1a3a60;
+  padding-bottom: 4px; margin-bottom: 8px;
+}
+.ap-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 0; border-bottom: 1px solid #0a1a30; font-size: 12px;
+}
+.ap-row .ap-label { color: #8090a0; }
+.ap-row .ap-value { color: #e0e8f0; font-weight: bold; }
+.ap-value.positive { color: #4ecf8a; }
+.ap-value.negative { color: #e94560; }
+.ap-action-btn {
+  width: 100%;
+  background: #0f2a40;
+  border: 1px solid #2a5a80;
+  color: #c0d8f0;
+  padding: 8px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  text-align: left;
+  margin-bottom: 6px;
+  transition: all 0.12s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ap-action-btn:hover { background: #1a4a70; border-color: #4a8ac0; color: #fff; }
+.ap-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.ap-action-btn .btn-cost { font-size: 10px; color: #7a9aaa; margin-left: auto; }
+.ap-progress-bg {
+  height: 6px; background: #0a1020; border-radius: 3px;
+  overflow: hidden; border: 1px solid #1a2a40; margin: 4px 0;
+}
+.ap-progress-fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
 </style>
 </head>
 <body>
@@ -3950,6 +4084,521 @@ function updateResourceBar() {
   if (woodEl) woodEl.textContent = (stock.wood || 0).toLocaleString();
 }
 
+/* ════════════════════════════════════════════════════════
+   AlertSystem — 패러독스 스타일 Pending Action 알림 버튼
+════════════════════════════════════════════════════════ */
+const AlertSystem = (() => {
+  "use strict";
+  const ALERT_DEFS = [
+    {
+      id: 'no_heir',
+      icon: '👑',
+      text: '후계자 없음',
+      detail: '후계자를 지정하지 않으면 군주 사망 시 혼란이 발생합니다.',
+      priority: 'high',
+      check: () => CharacterManager.getHeir('고려') === null,
+      action: 'open_characters',
+    },
+    {
+      id: 'low_gold',
+      icon: '💸',
+      text: '금고 부족',
+      detail: '금화가 100 미만입니다. 지출을 줄이거나 건물을 건설하세요.',
+      priority: 'high',
+      check: () => { const st = FactionManager.getFactionState('고려'); return st && st.gold < 100; },
+      action: 'open_economy',
+    },
+    {
+      id: 'deficit',
+      icon: '📉',
+      text: '재정 적자',
+      detail: '매월 금화가 줄고 있습니다.',
+      priority: 'medium',
+      check: () => { const e = FactionManager.calcMonthlyIncome('고려'); return e && (e.income - e.expenses) < 0; },
+      action: 'open_economy',
+    },
+    {
+      id: 'low_stability',
+      icon: '⚡',
+      text: '불안정',
+      detail: '안정도가 30 미만입니다. 민란이 발생할 수 있습니다.',
+      priority: 'high',
+      check: () => { const st = FactionManager.getFactionState('고려'); return st && st.stability < 30; },
+      action: 'open_stability',
+    },
+    {
+      id: 'no_general',
+      icon: '⚔',
+      text: '지휘관 없음',
+      detail: '지휘관 역할 캐릭터가 배정되지 않았습니다.',
+      priority: 'medium',
+      check: () => {
+        const chars = typeof CharacterManager.getAll === 'function'
+          ? CharacterManager.getAll().filter(c => c.faction === '고려' && c.role === 'general')
+          : [];
+        return chars.length === 0;
+      },
+      action: 'open_characters',
+    },
+    {
+      id: 'event_pending',
+      icon: '📜',
+      text: (count) => `미결 이벤트 ${count}건`,
+      detail: '처리해야 할 이벤트가 있습니다.',
+      priority: 'high',
+      check: () => {
+        if (typeof EventEngine !== 'undefined') {
+          const q = EventEngine.getQueue ? EventEngine.getQueue() : [];
+          return q.length > 0 ? q.length : false;
+        }
+        return false;
+      },
+      action: 'open_events',
+    },
+    {
+      id: 'hostile_neighbor',
+      icon: '⚠',
+      text: '적대 관계',
+      detail: '인접 세력과 관계가 -50 이하입니다.',
+      priority: 'medium',
+      check: () => {
+        const factions = ['북방부족', '남방', '동방', '해상세력'];
+        return factions.some(f => FactionManager.getRelation && FactionManager.getRelation('고려', f) < -50);
+      },
+      action: 'open_diplomacy',
+    },
+    {
+      id: 'low_population',
+      icon: '👥',
+      text: '인구 감소',
+      detail: '주요 프로빈스의 인구가 급감하고 있습니다.',
+      priority: 'low',
+      check: () => {
+        const provs = ProvinceManager.getFactionProvinces('고려');
+        return provs.some(p => p.population < 50000);
+      },
+      action: 'open_province',
+    },
+  ];
+
+  let activeAlerts = [];
+
+  function refresh() {
+    activeAlerts = [];
+    for (const def of ALERT_DEFS) {
+      try {
+        const result = def.check();
+        if (result !== false && result !== null && result !== undefined) {
+          activeAlerts.push({ ...def, count: typeof result === 'number' ? result : null });
+        }
+      } catch(e) { /* 안전하게 무시 */ }
+    }
+    renderTray();
+  }
+
+  function renderTray() {
+    const tray = document.getElementById('alert-tray');
+    if (!tray) return;
+    tray.innerHTML = '';
+    for (const alert of activeAlerts) {
+      const btn = document.createElement('button');
+      btn.className = `alert-btn priority-${alert.priority}`;
+      const textContent = typeof alert.text === 'function'
+        ? alert.text(alert.count)
+        : alert.text;
+      btn.innerHTML = `
+        <span class="ab-icon">${alert.icon}</span>
+        <span class="ab-text">${textContent}</span>
+        ${alert.count > 1 ? `<span class="ab-count">${alert.count}</span>` : ''}
+      `;
+      btn.title = alert.detail;
+      btn.onclick = () => handleAction(alert.action, alert);
+      tray.appendChild(btn);
+    }
+  }
+
+  function handleAction(action) {
+    switch(action) {
+      case 'open_characters':  ActionPanels.openCharacters(); break;
+      case 'open_economy':     ActionPanels.openEconomy(); break;
+      case 'open_stability':   ActionPanels.openStability(); break;
+      case 'open_diplomacy':   ActionPanels.openDiplomacy(); break;
+      case 'open_events':      ActionPanels.openEvents(); break;
+      case 'open_province':    ActionPanels.openProvinceList(); break;
+    }
+  }
+
+  return { refresh, renderTray, getAlerts: () => activeAlerts };
+})();
+
+/* ════════════════════════════════════════════════════════
+   ActionPanels — 슬라이드인 액션 패널
+════════════════════════════════════════════════════════ */
+const ActionPanels = (() => {
+  "use strict";
+  let currentPanel = null;
+
+  function _open(icon, title, contentFn) {
+    document.getElementById('action-panel-overlay').style.display = 'block';
+    document.getElementById('action-panel-icon').textContent = icon;
+    document.getElementById('action-panel-title').textContent = title;
+    document.getElementById('action-panel-body').innerHTML = contentFn();
+    currentPanel = { icon, title, contentFn };
+  }
+
+  function close() {
+    document.getElementById('action-panel-overlay').style.display = 'none';
+    currentPanel = null;
+  }
+
+  function refresh() {
+    if (currentPanel) {
+      document.getElementById('action-panel-body').innerHTML = currentPanel.contentFn();
+    }
+  }
+
+  // ── 경제 패널 ──
+  function openEconomy() {
+    _open('💰', '경제 현황', () => {
+      const st = FactionManager.getFactionState('고려');
+      if (!st) return '<p style="color:#556">데이터 없음</p>';
+      const eco = FactionManager.calcMonthlyIncome('고려');
+      const net = eco ? (eco.income - eco.expenses) : 0;
+      const netClass = net >= 0 ? 'positive' : 'negative';
+      const netSign = net >= 0 ? '+' : '';
+      return `
+        <div class="ap-section">
+          <div class="ap-section-title">재정 현황</div>
+          <div class="ap-row"><span class="ap-label">금화</span><span class="ap-value">${Math.floor(st.gold)}💰</span></div>
+          <div class="ap-row"><span class="ap-label">월수입</span><span class="ap-value positive">+${Math.floor(eco ? eco.income : 0)}</span></div>
+          <div class="ap-row"><span class="ap-label">월지출</span><span class="ap-value negative">-${Math.floor(eco ? eco.expenses : 0)}</span></div>
+          <div class="ap-row"><span class="ap-label">순수입</span><span class="ap-value ${netClass}">${netSign}${Math.floor(net)}</span></div>
+          <div class="ap-row"><span class="ap-label">위신</span>
+            <span class="ap-value">${Math.floor(st.prestige)}/100</span>
+          </div>
+          <div class="ap-progress-bg" style="margin-top:4px">
+            <div class="ap-progress-fill" style="width:${Math.min(100,st.prestige)}%;background:#f5a623"></div>
+          </div>
+          <div class="ap-row" style="margin-top:6px"><span class="ap-label">안정도</span>
+            <span class="ap-value">${Math.floor(st.stability)}/100</span>
+          </div>
+          <div class="ap-progress-bg">
+            <div class="ap-progress-fill" style="width:${Math.min(100,st.stability)}%;background:${st.stability>50?'#4ecf8a':'#e94560'}"></div>
+          </div>
+        </div>
+        <div class="ap-section">
+          <div class="ap-section-title">내 프로빈스 수입원</div>
+          ${ProvinceManager.getFactionProvinces('고려').map(p => `
+            <div class="ap-row">
+              <span class="ap-label">${p.name}</span>
+              <span class="ap-value">+${Math.floor(p.development * 8)}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    });
+  }
+
+  // ── 캐릭터 패널 ──
+  function openCharacters() {
+    _open('👑', '인물 관리', () => {
+      const ruler = CharacterManager.getRuler('고려');
+      const heir = CharacterManager.getHeir('고려');
+      const allChars = typeof CharacterManager.getAll === 'function'
+        ? CharacterManager.getAll().filter(c => c.faction === '고려')
+        : (ruler ? [ruler] : []);
+
+      const renderChar = (c, label) => {
+        if (!c) return `<div style="color:#e94560;font-size:12px;padding:6px 0">⚠ ${label} 없음</div>`;
+        const stats = CharacterManager.getEffectiveStats ? CharacterManager.getEffectiveStats(c) : c.stats;
+        return `
+          <div style="background:#0f2040;border:1px solid #1a3a60;border-radius:6px;padding:8px;margin-bottom:8px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+              <div style="font-size:20px">👤</div>
+              <div>
+                <div style="font-weight:bold;font-size:13px">${c.name}</div>
+                <div style="font-size:10px;color:#6080a0">${label} · ${c.age}세 · ${c.dynasty}가</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:5px;flex-wrap:wrap;font-size:10px">
+              <span style="background:#0a1830;border:1px solid #1a3050;border-radius:4px;padding:1px 6px">무⚔ ${stats ? stats.martial : c.stats.martial}</span>
+              <span style="background:#0a1830;border:1px solid #1a3050;border-radius:4px;padding:1px 6px">외🕊 ${stats ? stats.diplomacy : c.stats.diplomacy}</span>
+              <span style="background:#0a1830;border:1px solid #1a3050;border-radius:4px;padding:1px 6px">행⚙ ${stats ? stats.stewardship : c.stats.stewardship}</span>
+              <span style="background:#0a1830;border:1px solid #1a3050;border-radius:4px;padding:1px 6px">음🌑 ${stats ? stats.intrigue : c.stats.intrigue}</span>
+            </div>
+            ${c.traits && c.traits.length ? `<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:3px">
+              ${c.traits.map(t => `<span style="background:#1a2a40;color:#90b0d0;border:1px solid #2a4a60;border-radius:8px;padding:1px 6px;font-size:10px">${t}</span>`).join('')}
+            </div>` : ''}
+          </div>
+        `;
+      };
+
+      return `
+        <div class="ap-section">
+          <div class="ap-section-title">지도자</div>
+          ${renderChar(ruler, '군주')}
+        </div>
+        <div class="ap-section">
+          <div class="ap-section-title">후계자</div>
+          ${renderChar(heir, '후계자')}
+          ${!heir ? `<button class="ap-action-btn" onclick="ActionPanels._assignHeir()">
+            <span>👑</span> 후계자 지정 (캐릭터 중 선택)
+            <span class="btn-cost">필요: 위신 10</span>
+          </button>` : ''}
+        </div>
+        <div class="ap-section">
+          <div class="ap-section-title">외교 혼인</div>
+          <button class="ap-action-btn" onclick="ActionPanels._openMarriage()">
+            <span>💒</span> 혼인 외교 제의
+            <span class="btn-cost">관계 +15</span>
+          </button>
+        </div>
+      `;
+    });
+  }
+
+  // ── 안정도 패널 ──
+  function openStability() {
+    _open('⚡', '안정도 관리', () => {
+      const st = FactionManager.getFactionState('고려');
+      if (!st) return '';
+      const stab = Math.floor(st.stability);
+      const stabColor = stab > 60 ? '#4ecf8a' : stab > 30 ? '#f5a623' : '#e94560';
+      const eco = FactionManager.calcMonthlyIncome('고려');
+      const netIncome = eco ? (eco.income - eco.expenses) : 0;
+      return `
+        <div class="ap-section">
+          <div class="ap-section-title">현재 안정도</div>
+          <div style="font-size:32px;font-weight:bold;color:${stabColor};text-align:center;padding:10px 0">${stab}</div>
+          <div class="ap-progress-bg" style="height:12px;margin-bottom:12px">
+            <div class="ap-progress-fill" style="width:${stab}%;background:${stabColor}"></div>
+          </div>
+          <div style="font-size:11px;color:#778;margin-bottom:12px">
+            ${stab < 30 ? '⚠ 위험: 민란 발생 가능성이 높습니다.' : stab < 60 ? '📊 보통: 안정도를 높이는 것이 좋습니다.' : '✅ 양호: 안정적인 통치 중입니다.'}
+          </div>
+        </div>
+        <div class="ap-section">
+          <div class="ap-section-title">안정도 향상 수단</div>
+          <button class="ap-action-btn" onclick="ActionPanels._stabilityBoost(30)">
+            <span>🛕</span> 사원 건립 기원
+            <span class="btn-cost">💰 80 → 안정+10</span>
+          </button>
+          <button class="ap-action-btn" onclick="ActionPanels._stabilityBoost(20)">
+            <span>🎊</span> 백성 연회 개최
+            <span class="btn-cost">💰 50 → 안정+7</span>
+          </button>
+          <button class="ap-action-btn" onclick="ActionPanels._stabilityBoost(50)">
+            <span>📜</span> 세금 감면 선포
+            <span class="btn-cost">💰 0 → 안정+15, 월수입-20%</span>
+          </button>
+        </div>
+        <div class="ap-section">
+          <div class="ap-section-title">안정도 하락 원인</div>
+          <div class="ap-row"><span class="ap-label">재정 적자</span><span class="ap-value negative">${netIncome < 0 ? '적자 중 (-0.5/월)' : '-'}</span></div>
+          <div class="ap-row"><span class="ap-label">저안정도 페널티</span><span class="ap-value negative">${st.stability < 30 ? '민란 위험' : '없음'}</span></div>
+        </div>
+      `;
+    });
+  }
+
+  // ── 외교 패널 ──
+  function openDiplomacy() {
+    _open('🕊', '외교 현황', () => {
+      const factions = ['북방부족', '남방', '동방', '해상세력'];
+      const rows = factions.map(f => {
+        const rel = FactionManager.getRelation ? FactionManager.getRelation('고려', f) : 0;
+        const relColor = rel > 20 ? '#4ecf8a' : rel > -20 ? '#f5a623' : '#e94560';
+        const relBar = `<div class="ap-progress-bg" style="width:60px;display:inline-block;vertical-align:middle;margin-left:6px">
+          <div class="ap-progress-fill" style="width:${(rel+100)/2}%;background:${relColor}"></div>
+        </div>`;
+        return `
+          <div class="ap-row">
+            <span class="ap-label">${f}</span>
+            <span class="ap-value" style="color:${relColor}">${rel > 0 ? '+' : ''}${rel} ${relBar}</span>
+          </div>
+        `;
+      });
+      const warButtons = factions.map(f => {
+        const atWar = WarSystem.isAtWar('고려', f);
+        if (atWar) {
+          return `
+            <button class="ap-action-btn" style="border-color:#4ecf8a" onclick="WarSystem.makePeace('고려','${f}');ActionPanels.openDiplomacy()">
+              <span>🕊</span> ${f}와 평화 협정
+              <span class="btn-cost">관계 +10</span>
+            </button>
+          `;
+        }
+        return `
+          <button class="ap-action-btn" onclick="ActionPanels._sendGift('${f}')">
+            <span>🎁</span> ${f}에 선물 보내기
+            <span class="btn-cost">💰 40 → 관계+10</span>
+          </button>
+          <button class="ap-action-btn" style="border-color:#e94560" onclick="WarSystem.declareWar('고려','${f}');ActionPanels.openDiplomacy()">
+            <span>⚔</span> ${f}에 전쟁 선포
+            <span class="btn-cost">💰 50, 위신-5</span>
+          </button>
+        `;
+      });
+      return `
+        <div class="ap-section">
+          <div class="ap-section-title">세력 관계도</div>
+          ${rows.join('')}
+        </div>
+        <div class="ap-section">
+          <div class="ap-section-title">외교 행동</div>
+          ${warButtons.join('')}
+        </div>
+      `;
+    });
+  }
+
+  // ── 이벤트 패널 ──
+  function openEvents() {
+    _open('📜', '미결 이벤트', () => {
+      if (typeof EventEngine !== 'undefined' && EventEngine.getQueue) {
+        const queue = EventEngine.getQueue();
+        if (queue.length === 0) return '<div style="color:#556;padding:20px;text-align:center">처리할 이벤트 없음</div>';
+        return queue.map((ev, i) => `
+          <div style="background:#0f2040;border:1px solid #1a3a60;border-radius:6px;padding:10px;margin-bottom:8px">
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+              <span style="font-size:18px">${ev.icon||'📜'}</span>
+              <span style="font-weight:bold;color:#f5a623">${ev.title}</span>
+            </div>
+            <div style="font-size:11px;color:#8090a0;margin-bottom:8px">${ev.desc}</div>
+            ${(ev.choices||[]).map((ch, ci) => `
+              <button class="ap-action-btn" onclick="if(typeof EventEngine!=='undefined')EventEngine.resolveChoice(${i},${ci});ActionPanels.openEvents()">
+                ${ch.text}
+              </button>
+            `).join('')}
+          </div>
+        `).join('');
+      }
+      return '<div style="color:#556;padding:20px;text-align:center">이벤트 시스템 로딩 중...</div>';
+    });
+  }
+
+  // ── 프로빈스 목록 패널 ──
+  function openProvinceList() {
+    _open('🗺', '프로빈스 현황', () => {
+      const provs = ProvinceManager.getFactionProvinces('고려');
+      return `
+        <div class="ap-section">
+          <div class="ap-section-title">고려 프로빈스 (${provs.length}개)</div>
+          ${provs.map(p => `
+            <div class="ap-row" style="cursor:pointer" onclick="MapRenderer.selectProvince&&MapRenderer.selectProvince(${p.id});ActionPanels.close()">
+              <span class="ap-label">${p.name} <small style="color:#334">${p.terrain}</small></span>
+              <span class="ap-value" style="font-size:11px">${(p.population/10000).toFixed(1)}만 · Lv${p.development}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    });
+  }
+
+  // ── 내부 액션 함수들 ──
+  function _stabilityBoost(cost) {
+    const st = FactionManager.getFactionState('고려');
+    if (!st) return;
+    if (cost > 0 && st.gold < cost) {
+      Notifications.push('💰 금화가 부족합니다!', 'alert');
+      return;
+    }
+    if (cost > 0) st.gold -= cost;
+    if (cost === 30) { st.stability = Math.min(100, st.stability + 10); Notifications.push('🛕 사원 기원 — 안정도 +10', 'good'); }
+    else if (cost === 20) { st.stability = Math.min(100, st.stability + 7); Notifications.push('🎊 연회 개최 — 안정도 +7', 'good'); }
+    else if (cost === 50) { st.stability = Math.min(100, st.stability + 15); Notifications.push('📜 세금 감면 — 안정도 +15', 'good'); }
+    refresh();
+    AlertSystem.refresh();
+  }
+
+  function _sendGift(targetFaction) {
+    const st = FactionManager.getFactionState('고려');
+    if (!st || st.gold < 40) { Notifications.push('💰 금화 40이 필요합니다!', 'alert'); return; }
+    st.gold -= 40;
+    if (FactionManager.modRelation) FactionManager.modRelation('고려', targetFaction, 10);
+    Notifications.push(`🎁 ${targetFaction}에 선물을 보냈습니다 (관계 +10)`, 'good');
+    refresh();
+    AlertSystem.refresh();
+  }
+
+  function _assignHeir() {
+    const ruler = CharacterManager.getRuler('고려');
+    if (!ruler) return;
+    const candidates = typeof CharacterManager.getAll === 'function'
+      ? CharacterManager.getAll().filter(c => c.faction === '고려' && c.id !== ruler.id && c.role !== 'heir')
+      : [];
+    if (candidates.length === 0) { Notifications.push('후계자로 지정할 인물이 없습니다', 'warn'); return; }
+    candidates[0].role = 'heir';
+    Notifications.push(`👑 ${candidates[0].name} 님을 후계자로 지정했습니다`, 'good');
+    refresh();
+    AlertSystem.refresh();
+  }
+
+  function _openMarriage() {
+    Notifications.push('💒 혼인 외교 기능 — 다음 업데이트에서 구현 예정', 'warn');
+  }
+
+  return { openEconomy, openCharacters, openStability, openDiplomacy, openEvents, openProvinceList, close, refresh, _stabilityBoost, _sendGift, _assignHeir, _openMarriage };
+})();
+
+/* ════════════════════════════════════════════════════════
+   WarSystem — M08 전쟁/점령 시스템
+════════════════════════════════════════════════════════ */
+const WarSystem = (() => {
+  "use strict";
+  let activeWars = [];
+  const WAR_COST = 50;
+
+  function declareWar(attackerId, defenderId, claimProvinceId) {
+    const st = FactionManager.getFactionState(attackerId);
+    if (!st || st.gold < WAR_COST) {
+      Notifications.push('전쟁 선포에 금화 50이 필요합니다', 'alert');
+      return false;
+    }
+    st.gold -= WAR_COST;
+    st.prestige -= 5;
+    if (FactionManager.modRelation) FactionManager.modRelation(attackerId, defenderId, -30);
+    activeWars.push({
+      attackerId,
+      defenderId,
+      startMonth: GameCore.getState().month,
+      claimedProvinces: claimProvinceId ? [claimProvinceId] : [],
+    });
+    Notifications.push(`⚔ ${attackerId}가 ${defenderId}에 전쟁을 선포했습니다!`, 'alert');
+    AlertSystem.refresh();
+    return true;
+  }
+
+  function tryOccupy(divisionId, provinceId) {
+    const prov = ProvinceManager.getById(provinceId);
+    if (!prov) return;
+    const division = typeof MilitaryManager !== 'undefined' ? MilitaryManager.getDivisionById(divisionId) : null;
+    if (!division) return;
+    const oldFaction = prov.faction;
+    prov.faction = division.factionId;
+    Notifications.push(`🚩 ${prov.name} 점령! (${oldFaction} → ${division.factionId})`, 'good');
+    if (typeof MapRenderer !== 'undefined' && MapRenderer.markDirty) MapRenderer.markDirty();
+    AlertSystem.refresh();
+  }
+
+  function makePeace(attackerId, defenderId) {
+    activeWars = activeWars.filter(w => !(w.attackerId === attackerId && w.defenderId === defenderId));
+    if (FactionManager.modRelation) FactionManager.modRelation(attackerId, defenderId, 10);
+    Notifications.push(`🕊 ${attackerId}와 ${defenderId}가 평화 협정을 맺었습니다`, 'good');
+    AlertSystem.refresh();
+  }
+
+  function getActiveWars() { return activeWars; }
+  function isAtWar(fId1, fId2) {
+    return activeWars.some(w =>
+      (w.attackerId === fId1 && w.defenderId === fId2) ||
+      (w.attackerId === fId2 && w.defenderId === fId1)
+    );
+  }
+
+  return { declareWar, tryOccupy, makePeace, getActiveWars, isAtWar };
+})();
+
 window.addEventListener('load', () => {
   MapRenderer.init();
   Notifications.init();
@@ -4028,8 +4677,28 @@ window.addEventListener('load', () => {
 
   // 초기 세력 패널
   setTimeout(() => UI.showFactionPanel(), 100);
+
+  // AlertSystem — 매 5초 + 매월 갱신
+  GameCore.on('newMonth', () => AlertSystem.refresh());
+  setInterval(() => AlertSystem.refresh(), 5000);
+  setTimeout(() => AlertSystem.refresh(), 1500);
 });
 </script>
+<!-- ── Alert Tray ── -->
+<div id="alert-tray"></div>
+
+<!-- ── Action Panel ── -->
+<div id="action-panel-overlay" style="display:none">
+  <div id="action-panel">
+    <div id="action-panel-header">
+      <span id="action-panel-icon"></span>
+      <span id="action-panel-title"></span>
+      <button id="action-panel-close" onclick="ActionPanels.close()">✕</button>
+    </div>
+    <div id="action-panel-body"></div>
+  </div>
+</div>
+
 <!-- ── 이벤트 팝업 오버레이 ── -->
 <div id="event-overlay" style="display:none" role="dialog" aria-modal="true" aria-labelledby="event-title">
   <div id="event-popup">
