@@ -940,6 +940,9 @@
       <span aria-label="목재"><span aria-hidden="true">🪵</span> <span id="res-wood">0</span></span>
       <span id="trade-income-display" style="font-size:11px;color:#f5a623;margin-left:8px;cursor:pointer" onclick="ActionPanels.openTrade()" title="교역로 관리">🛤 +0/월</span>
       <button class="ctrl-btn" onclick="ActionPanels.openTech()" title="기술 연구" style="font-size:13px;padding:4px 8px">🔬</button>
+      <button id="ai-toggle-btn" class="ctrl-btn" title="AI 자동 행동 ON/OFF"
+        onclick="const on=AIManager.toggle();this.textContent='🤖 AI '+(on?'ON':'OFF');this.style.opacity=on?'1':'0.5';"
+        style="font-size:12px;padding:4px 8px">🤖 AI ON</button>
     </div>
     <button id="oneclick-start-btn">▶ 원클릭 시작</button>
     <button id="saveload-btn" onclick="SaveLoadManager.openModal()" title="세이브/로드">💾 세이브/로드</button>
@@ -5997,6 +6000,254 @@ const TechManager = (() => {
 })();
 
 /* ════════════════════════════════════════════════════════
+   M14 — AI MANAGER
+   AI 세력 자동 행동: 군사, 외교, 경제
+════════════════════════════════════════════════════════ */
+const AIManager = (() => {
+  'use strict';
+
+  const PLAYER_FACTION = '고려';
+  const AI_FACTIONS    = ['북방부족', '동여진', '서번국', '남해도'];
+
+  /** 세력별 고정 성향 프로파일 */
+  const FACTION_PERSONALITIES = {
+    '북방부족': { aggression: 0.8, expansion: 0.7, diplomacy: 0.2, economy: 0.3 },
+    '동여진':   { aggression: 0.6, expansion: 0.5, diplomacy: 0.4, economy: 0.5 },
+    '서번국':   { aggression: 0.3, expansion: 0.4, diplomacy: 0.8, economy: 0.7 },
+    '남해도':   { aggression: 0.4, expansion: 0.3, diplomacy: 0.6, economy: 0.9 },
+  };
+
+  /** 세력별 마지막 군사 행동 월 기록 */
+  const _lastMilitaryActionMonth = {};
+
+  /** AI 활성 여부 */
+  let _enabled = true;
+
+  // ── AI 행동 임계값 상수 ──
+  const MILITARY_ACTION_THRESHOLD  = 0.5;
+  const MILITARY_COOLDOWN_MONTHS   = 3;
+  const HIGH_AGGRESSION_THRESHOLD  = 0.7;  // 플레이어 공격 최소 aggression
+  const DIPLOMACY_ACTION_THRESHOLD = 0.4;
+  const ECONOMY_ACTION_THRESHOLD   = 0.5;
+  const MAX_GOLD_FOR_DEVELOPMENT   = 100;  // 이 이상이면 경제 AI 스킵
+  const DEVELOPMENT_COST           = 50;
+  const MAX_DEVELOPMENT_LEVEL      = 6;
+  const MIN_RELATION_IMPROVEMENT   = 5;
+  const MAX_RELATION_IMPROVEMENT   = 15;
+  const ALLIANCE_RELATION_THRESHOLD = 60;  // 이 이상이면 비공격 협약 시도
+  const NOTIFICATION_CHANCE        = 0.5;
+  const MAX_AI_TROOPS              = 3000;
+  const RECRUITMENT_COST           = 80;
+  const RECRUIT_UNITS              = { infantry: 500, cavalry: 100, archers: 100, siege: 0 };
+
+  // ── 내부 헬퍼 ──
+
+  function _rand() { return Math.random(); }
+
+  /** 현재 게임 월 반환 */
+  function _currentMonth() {
+    try {
+      const s = GameCore.getState();
+      return s.year * 12 + s.month;
+    } catch (e) { return 0; }
+  }
+
+  /** 특정 세력이 현재 전쟁 중인지 확인 */
+  function _isAtWar(factionId) {
+    try {
+      if (typeof WarSystem === 'undefined') return false;
+      return AI_FACTIONS.concat([PLAYER_FACTION]).some(f => {
+        if (f === factionId) return false;
+        return WarSystem.isAtWar(factionId, f);
+      });
+    } catch (e) { return false; }
+  }
+
+  /** 세력의 모든 사단에서 총 병력 합산 */
+  function _getTotalTroops(factionId) {
+    try {
+      const divs = MilitaryManager.getDivisionsByFaction(factionId);
+      return divs.reduce((sum, d) => {
+        const u = d.units || {};
+        return sum + (u.infantry||0) + (u.cavalry||0) + (u.archers||0) + (u.siege||0);
+      }, 0);
+    } catch (e) { return 0; }
+  }
+
+  // ── 군사 AI ──
+
+  /** 인접 적 프로빈스 중 공격 가능한 대상 탐색 */
+  function _findAttackTarget(factionId, personality) {
+    try {
+      const myProvs = ProvinceManager.getFactionProvinces(factionId);
+      const adj     = MilitaryManager.getAdjacency();
+      for (const prov of myProvs) {
+        const neighbors = adj[prov.id] || [];
+        for (const nId of neighbors) {
+          const np = ProvinceManager.getById(nId);
+          if (!np || np.faction === factionId || np.faction === '미지') continue;
+          // 플레이어 영토는 고공격성일 때만 공격
+          if (np.faction === PLAYER_FACTION && personality.aggression <= HIGH_AGGRESSION_THRESHOLD) continue;
+          return np;
+        }
+      }
+    } catch (e) { /* skip */ }
+    return null;
+  }
+
+  /** 군사 AI 행동 */
+  function _doMilitaryAction(factionId, personality) {
+    try {
+      if (_isAtWar(factionId)) return;
+      const now = _currentMonth();
+      const last = _lastMilitaryActionMonth[factionId] || -999;
+      if (now - last < MILITARY_COOLDOWN_MONTHS) return; // 쿨다운
+
+      if (personality.aggression * _rand() <= MILITARY_ACTION_THRESHOLD) return;
+
+      const divs = MilitaryManager.getDivisionsByFaction(factionId);
+      if (!divs || divs.length === 0) return;
+
+      const target = _findAttackTarget(factionId, personality);
+      if (!target) return;
+
+      _lastMilitaryActionMonth[factionId] = now;
+      GameCore.emit('battleStart', {
+        attackFaction: factionId,
+        defendFaction: target.faction,
+        provinceId:    target.id,
+      });
+    } catch (e) {
+      console.warn('[AIManager] military action error:', e);
+    }
+  }
+
+  // ── 외교 AI ──
+
+  /** 외교 AI 행동 */
+  function _doDiplomacyAction(factionId, personality) {
+    try {
+      if (_isAtWar(factionId)) return;
+      if (personality.diplomacy * _rand() <= DIPLOMACY_ACTION_THRESHOLD) return;
+
+      const allFactions = AI_FACTIONS.concat([PLAYER_FACTION]).filter(f => f !== factionId);
+      for (const target of allFactions) {
+        const rel = FactionManager.getRelation(factionId, target);
+        if (rel >= 30) continue;
+
+        const delta = MIN_RELATION_IMPROVEMENT + Math.floor(_rand() * (MAX_RELATION_IMPROVEMENT - MIN_RELATION_IMPROVEMENT + 1));
+        FactionManager.modRelation(factionId, target, delta);
+
+        // 관계 > 임계값이면 비공격 협약 시도
+        const newRel = FactionManager.getRelation(factionId, target);
+        if (newRel > ALLIANCE_RELATION_THRESHOLD && typeof DiplomacyManager !== 'undefined' &&
+            typeof DiplomacyManager.proposeAlliance === 'function') {
+          try { DiplomacyManager.proposeAlliance(factionId, target); } catch (e2) { /* skip */ }
+        }
+
+        // 알림 (50% 확률)
+        if (_rand() < NOTIFICATION_CHANCE && typeof Notifications !== 'undefined') {
+          Notifications.push(`🤝 ${factionId}이(가) ${target}과 관계를 개선했습니다`);
+        }
+        break; // 한 번에 1대상만
+      }
+    } catch (e) {
+      console.warn('[AIManager] diplomacy action error:', e);
+    }
+  }
+
+  // ── 경제 AI ──
+
+  /** 경제 AI 행동 */
+  function _doEconomyAction(factionId, personality) {
+    try {
+      const st = FactionManager.getFactionState(factionId);
+      if (!st || st.gold >= MAX_GOLD_FOR_DEVELOPMENT) return;
+      if (personality.economy * _rand() <= ECONOMY_ACTION_THRESHOLD) return;
+      if (st.gold < DEVELOPMENT_COST) return;
+
+      const provs = ProvinceManager.getFactionProvinces(factionId);
+      const target = provs.find(p => (p.development || 1) < MAX_DEVELOPMENT_LEVEL);
+      if (!target) return;
+
+      target.development = (target.development || 1) + 1;
+      FactionManager.addGold(factionId, -DEVELOPMENT_COST);
+    } catch (e) {
+      console.warn('[AIManager] economy action error:', e);
+    }
+  }
+
+  // ── 병력 보충 AI ──
+
+  /** 병력 보충 AI 행동 */
+  function _doRecruitAction(factionId) {
+    try {
+      const total = _getTotalTroops(factionId);
+      if (total >= MAX_AI_TROOPS) return;
+
+      const st = FactionManager.getFactionState(factionId);
+      if (!st || st.gold <= RECRUITMENT_COST) return;
+
+      // 수도 프로빈스에 소규모 사단 추가 생성
+      const fDef = ProvinceManager.getFaction(factionId);
+      if (!fDef || !fDef.capital) return;
+
+      if (typeof MilitaryManager.createDivision === 'function') {
+        MilitaryManager.createDivision(factionId, fDef.capital, { ...RECRUIT_UNITS });
+        FactionManager.addGold(factionId, -RECRUITMENT_COST);
+      }
+    } catch (e) {
+      console.warn('[AIManager] recruit action error:', e);
+    }
+  }
+
+  // ── 공개 API ──
+
+  /** AI 매월 틱 — 각 AI 세력의 행동 결정 */
+  function onMonthTick() {
+    if (!_enabled) return;
+    for (const factionId of AI_FACTIONS) {
+      try {
+        const personality = FACTION_PERSONALITIES[factionId];
+        if (!personality) continue;
+        _doMilitaryAction(factionId, personality);
+        _doDiplomacyAction(factionId, personality);
+        _doEconomyAction(factionId, personality);
+        _doRecruitAction(factionId);
+      } catch (e) {
+        console.warn(`[AIManager] tick error for ${factionId}:`, e);
+      }
+    }
+  }
+
+  /** AIManager 초기화 */
+  function init() {
+    AI_FACTIONS.forEach(f => { _lastMilitaryActionMonth[f] = -999; });
+    console.log('[AIManager] initialized');
+  }
+
+  /**
+   * 세력 성향 반환
+   * @param {string} factionId
+   * @returns {Object|null}
+   */
+  function getPersonality(factionId) {
+    return FACTION_PERSONALITIES[factionId] || null;
+  }
+
+  /** AI ON/OFF 토글 */
+  function toggle() {
+    _enabled = !_enabled;
+    return _enabled;
+  }
+
+  /** AI 활성 여부 반환 */
+  function isEnabled() { return _enabled; }
+
+  return { init, onMonthTick, getPersonality, toggle, isEnabled };
+})();
+
+/* ════════════════════════════════════════════════════════
    M16 — SAVE/LOAD MANAGER
    JSON 직렬화, localStorage 슬롯 관리, 자동저장, UI 모달
 ════════════════════════════════════════════════════════ */
@@ -6219,6 +6470,7 @@ window.addEventListener('load', () => {
   MapRenderer.init();
   Notifications.init();
   TechManager.init();
+  AIManager.init();
   SaveLoadManager.init();
   GameCore.start();
 
@@ -6235,6 +6487,7 @@ window.addEventListener('load', () => {
     TechManager.onMonthTick();
     WarSystem.onMonthTick(GameCore.getState().month);
     DiplomacyManager.onMonthTick();
+    AIManager.onMonthTick();
     AlertSystem.refresh();
     updateResourceBar();
     const el = document.getElementById('trade-income-display');
