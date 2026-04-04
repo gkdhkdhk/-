@@ -714,6 +714,135 @@
   padding: 3px 10px;
   border-radius: 4px;
 }
+
+/* ── Alert Tray (패러독스 스타일 알림 버튼) ── */
+#alert-tray {
+  position: fixed;
+  top: 88px;
+  left: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 20;
+  pointer-events: none;
+}
+.alert-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(8, 16, 34, 0.94);
+  border: 1px solid #2a4a7a;
+  border-radius: 5px;
+  padding: 5px 10px 5px 8px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  color: #c0d0e0;
+  transition: all 0.15s;
+  white-space: nowrap;
+  pointer-events: all;
+  min-width: 132px;
+  animation: alertSlideIn 0.22s ease;
+  line-height: 1.3;
+}
+.alert-btn:hover {
+  background: rgba(26, 56, 110, 0.96);
+  border-color: #5a9aca;
+  color: #fff;
+  transform: translateX(5px);
+}
+.alert-btn .ab-icon { font-size: 13px; flex-shrink: 0; }
+.alert-btn .ab-text { flex: 1; }
+.alert-btn .ab-badge {
+  background: #e94560; color: #fff;
+  border-radius: 8px; padding: 1px 5px;
+  font-size: 10px; font-weight: bold;
+}
+.alert-btn.p-high { border-color: #c03040; }
+.alert-btn.p-mid  { border-color: #b07010; }
+.alert-btn.p-low  { border-color: #3a6aaa; }
+@keyframes alertSlideIn {
+  from { opacity: 0; transform: translateX(-18px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Action Panel ── */
+#ap-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+#ap-panel {
+  position: absolute;
+  right: 312px;
+  top: 88px;
+  width: 320px;
+  max-height: calc(100vh - 115px);
+  background: #131e38;
+  border: 1px solid #2a5a8a;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  pointer-events: all;
+  box-shadow: -4px 6px 28px rgba(0,0,0,0.6);
+  animation: apIn 0.18s ease;
+}
+@keyframes apIn {
+  from { opacity: 0; transform: translateX(18px); }
+  to   { opacity: 1; transform: none; }
+}
+#ap-hd {
+  background: #0e2840;
+  padding: 9px 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #1a3a60;
+  flex-shrink: 0;
+}
+#ap-icon-el { font-size: 17px; }
+#ap-title-el { flex: 1; font-weight: bold; color: #f5a623; font-size: 13px; }
+#ap-close-btn {
+  background: none; border: none; color: #445;
+  cursor: pointer; font-size: 15px; padding: 0 3px;
+  line-height: 1;
+}
+#ap-close-btn:hover { color: #e94560; }
+#ap-bd {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+.aps { margin-bottom: 12px; }
+.aps-t {
+  font-size: 10px; text-transform: uppercase;
+  letter-spacing: 1px; color: #f5a623;
+  border-bottom: 1px solid #1a3a60;
+  padding-bottom: 3px; margin-bottom: 7px;
+}
+.apr {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 3px 0; border-bottom: 1px solid #0a1830; font-size: 12px;
+}
+.apl { color: #7080a0; }
+.apv { color: #d8e4f0; font-weight: bold; }
+.apv.pos { color: #4ecf8a; }
+.apv.neg { color: #e94560; }
+.apb {
+  width: 100%; background: #0e2840; border: 1px solid #285070;
+  color: #b0ccf0; padding: 7px 11px; border-radius: 4px;
+  cursor: pointer; font-size: 11px; font-family: inherit;
+  text-align: left; margin-bottom: 5px;
+  transition: background 0.12s, border-color 0.12s;
+  display: flex; align-items: center; gap: 7px;
+}
+.apb:hover { background: #183e60; border-color: #4a8acc; color: #fff; }
+.apb:disabled { opacity: 0.38; cursor: not-allowed; }
+.apb .bc { font-size: 10px; color: #6a8aaa; margin-left: auto; }
+.apbpg { height: 5px; background: #080e1c; border-radius: 3px; overflow: hidden; margin: 3px 0 7px; }
+.apbpf { height: 100%; border-radius: 3px; transition: width 0.4s; }
 </style>
 </head>
 <body>
@@ -3950,6 +4079,284 @@ function updateResourceBar() {
   if (woodEl) woodEl.textContent = (stock.wood || 0).toLocaleString();
 }
 
+// ═══════════════════════════════════════════════════════
+//  AlertSystem — 패러독스 스타일 할일 알림 트레이
+// ═══════════════════════════════════════════════════════
+const AlertSystem = (() => {
+  'use strict';
+
+  const DEFS = [
+    {
+      id: 'no_heir', icon: '👑', text: '후계자 없음', pri: 'p-high', action: 'chars',
+      check() { try{ return CharacterManager.getHeir('고려') === null; }catch(e){ return false; } }
+    },
+    {
+      id: 'low_gold', icon: '💸', text: '금고 부족', pri: 'p-high', action: 'econ',
+      check() { try{ const s=FactionManager.getFactionState('고려'); return s && s.gold < 100; }catch(e){ return false; } }
+    },
+    {
+      id: 'deficit', icon: '📉', text: '재정 적자', pri: 'p-mid', action: 'econ',
+      check() { try{ const e=FactionManager.calcMonthlyIncome('고려'); return e && (e.income-e.expenses)<0; }catch(e){ return false; } }
+    },
+    {
+      id: 'low_stab', icon: '⚡', text: '불안정', pri: 'p-high', action: 'stab',
+      check() { try{ const s=FactionManager.getFactionState('고려'); return s && s.stability<30; }catch(e){ return false; } }
+    },
+    {
+      id: 'hostile', icon: '⚠', text: '적대 세력', pri: 'p-mid', action: 'dipl',
+      check() { try{ return ['북방부족','남방','동방','해상세력'].some(f=>FactionManager.getRelation&&FactionManager.getRelation('고려',f)<-50); }catch(e){ return false; } }
+    },
+    {
+      id: 'at_war', icon: '⚔', text: (n) => `전쟁 중 ${n}건`, pri: 'p-high', action: 'dipl',
+      check() { try{ return typeof WarSystem!=='undefined' ? WarSystem.getWars().filter(w=>w.atk==='고려'||w.def==='고려').length||false : false; }catch(e){ return false; } }
+    },
+    {
+      id: 'low_pop', icon: '👥', text: '인구 위기', pri: 'p-low', action: 'provs',
+      check() { try{ return ProvinceManager.getFactionProvinces('고려').some(p=>p.population<50000); }catch(e){ return false; } }
+    },
+  ];
+
+  function refresh() {
+    const tray = document.getElementById('alert-tray');
+    if (!tray) return;
+    tray.innerHTML = '';
+    for (const d of DEFS) {
+      const result = d.check();
+      if (!result) continue;
+      const btn = document.createElement('button');
+      const isNum = typeof result === 'number' && result > 1;
+      const txt = typeof d.text === 'function' ? d.text(result) : d.text;
+      btn.className = 'alert-btn ' + d.pri;
+      btn.innerHTML = `<span class="ab-icon">${d.icon}</span><span class="ab-text">${txt}</span>${isNum ? `<span class="ab-badge">${result}</span>` : ''}`;
+      btn.onclick = () => AP.open(d.action);
+      tray.appendChild(btn);
+    }
+  }
+
+  return { refresh };
+})();
+
+// ═══════════════════════════════════════════════════════
+//  WarSystem — 전쟁 선포 / 화평
+// ═══════════════════════════════════════════════════════
+const WarSystem = (() => {
+  'use strict';
+  let _wars = [];
+
+  function declareWar(atk, def) {
+    const st = FactionManager.getFactionState(atk);
+    if (!st || st.gold < 50) { Notifications.push('⚔ 전쟁 선포 — 금화 50 필요', 'alert'); return false; }
+    st.gold -= 50;
+    st.prestige = Math.max(0, (st.prestige||0) - 5);
+    if (FactionManager.modRelation) FactionManager.modRelation(atk, def, -30);
+    _wars.push({ atk, def, start: GameCore.getState().month });
+    Notifications.push(`⚔ ${atk} → ${def} 전쟁 선포!`, 'alert');
+    AlertSystem.refresh();
+    return true;
+  }
+
+  function makepeace(atk, def) {
+    _wars = _wars.filter(w => !(w.atk===atk && w.def===def));
+    if (FactionManager.modRelation) FactionManager.modRelation(atk, def, 10);
+    Notifications.push(`🕊 ${atk} ↔ ${def} 평화 협정`, 'good');
+    AlertSystem.refresh();
+  }
+
+  function isAtWar(f1, f2) {
+    return _wars.some(w => (w.atk===f1&&w.def===f2)||(w.atk===f2&&w.def===f1));
+  }
+  function getWars() { return _wars; }
+
+  return { declareWar, makepeace, isAtWar, getWars };
+})();
+
+// ═══════════════════════════════════════════════════════
+//  AP — Action Panels
+// ═══════════════════════════════════════════════════════
+const AP = (() => {
+  'use strict';
+  let _cur = null;
+
+  const META = {
+    econ:  { icon:'💰', title:'경제 현황' },
+    chars: { icon:'👑', title:'인물 관리' },
+    stab:  { icon:'⚡', title:'안정도 관리' },
+    dipl:  { icon:'🕊', title:'외교 현황' },
+    provs: { icon:'🗺', title:'프로빈스 현황' },
+  };
+
+  function open(key) {
+    _cur = key;
+    const m = META[key] || { icon:'📋', title:'정보' };
+    document.getElementById('ap-icon-el').textContent  = m.icon;
+    document.getElementById('ap-title-el').textContent = m.title;
+    document.getElementById('ap-overlay').style.display = 'block';
+    _renderBody();
+  }
+
+  function close() {
+    document.getElementById('ap-overlay').style.display = 'none';
+    _cur = null;
+  }
+
+  function refresh() { if (_cur) _renderBody(); }
+
+  function _renderBody() {
+    const bd = document.getElementById('ap-bd');
+    if (!bd) return;
+    const fn = { econ:_econ, chars:_chars, stab:_stab, dipl:_dipl, provs:_provs };
+    bd.innerHTML = (fn[_cur] || (() => '<p style="color:#556;padding:20px;text-align:center">준비 중</p>'))();
+  }
+
+  /* ── 경제 패널 ── */
+  function _econ() {
+    const st = FactionManager.getFactionState('고려');
+    if (!st) return '<p style="color:#556">데이터 없음</p>';
+    const ec = FactionManager.calcMonthlyIncome('고려');
+    const net = ec ? ec.income - ec.expenses : 0;
+    const nc = net >= 0 ? 'pos' : 'neg', ns = net >= 0 ? '+' : '';
+    const provs = ProvinceManager.getFactionProvinces('고려');
+    return `<div class="aps"><div class="aps-t">재정 요약</div>
+      <div class="apr"><span class="apl">금화</span><span class="apv">💰 ${Math.floor(st.gold)}</span></div>
+      <div class="apr"><span class="apl">월수입</span><span class="apv pos">+${Math.floor(ec?.income||0)}</span></div>
+      <div class="apr"><span class="apl">월지출</span><span class="apv neg">-${Math.floor(ec?.expenses||0)}</span></div>
+      <div class="apr"><span class="apl">순수입</span><span class="apv ${nc}">${ns}${Math.floor(net)}/월</span></div>
+    </div>
+    <div class="aps"><div class="aps-t">국력 지표</div>
+      <div class="apr"><span class="apl">위신</span><span class="apv">${Math.floor(st.prestige||0)}/100</span></div>
+      <div class="apbpg"><div class="apbpf" style="width:${st.prestige||0}%;background:#f5a623"></div></div>
+      <div class="apr"><span class="apl">안정도</span><span class="apv">${Math.floor(st.stability||0)}/100</span></div>
+      <div class="apbpg"><div class="apbpf" style="width:${st.stability||0}%;background:${(st.stability||0)>50?'#4ecf8a':'#e94560'}"></div></div>
+    </div>
+    <div class="aps"><div class="aps-t">프로빈스별 수입</div>
+      ${provs.map(p=>`<div class="apr"><span class="apl">${p.name}</span><span class="apv pos">+${Math.floor((p.development||1)*8)}</span></div>`).join('')}
+    </div>`;
+  }
+
+  /* ── 캐릭터 패널 ── */
+  function _chars() {
+    const ruler = CharacterManager.getRuler('고려');
+    const heir  = CharacterManager.getHeir('고려');
+    const card = (c, lbl) => {
+      if (!c) return `<div style="color:#e94560;font-size:12px;padding:7px;background:#1a0808;border-radius:4px;margin-bottom:7px">⚠ ${lbl} 없음</div>`;
+      const s = c.stats||{};
+      const tr = (c.traits||[]).map(t=>`<span style="background:#172840;color:#80a8c8;border:1px solid #1e3a58;border-radius:8px;padding:1px 5px;font-size:9px;margin:1px">${t}</span>`).join('');
+      return `<div style="background:#0d1e3c;border:1px solid #1a3660;border-radius:5px;padding:8px;margin-bottom:7px">
+        <div style="font-weight:bold;font-size:12px;margin-bottom:3px">${c.name} <span style="color:#445;font-size:10px">${lbl}·${c.age}세·${c.dynasty}가</span></div>
+        <div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:4px">
+          <span style="background:#080e1c;border:1px solid #1a2840;border-radius:3px;padding:1px 5px;font-size:10px">⚔${s.martial||0}</span>
+          <span style="background:#080e1c;border:1px solid #1a2840;border-radius:3px;padding:1px 5px;font-size:10px">🕊${s.diplomacy||0}</span>
+          <span style="background:#080e1c;border:1px solid #1a2840;border-radius:3px;padding:1px 5px;font-size:10px">⚙${s.stewardship||0}</span>
+          <span style="background:#080e1c;border:1px solid #1a2840;border-radius:3px;padding:1px 5px;font-size:10px">🌑${s.intrigue||0}</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:2px">${tr}</div>
+      </div>`;
+    };
+    return `<div class="aps"><div class="aps-t">지도자</div>${card(ruler,'군주')}</div>
+    <div class="aps"><div class="aps-t">후계자</div>${card(heir,'후계자')}
+      ${!heir?`<button class="apb" onclick="AP._doAssignHeir()">👑 후계자 자동 지정<span class="bc">무료</span></button>`:''}
+    </div>
+    <div class="aps"><div class="aps-t">외교 혼인</div>
+      <button class="apb" onclick="Notifications.push('💒 혼인 외교 — 다음 업데이트 예정','warn')">💒 혼인 제의<span class="bc">관계+15</span></button>
+    </div>`;
+  }
+
+  /* ── 안정도 패널 ── */
+  function _stab() {
+    const st = FactionManager.getFactionState('고려');
+    if (!st) return '';
+    const s = Math.floor(st.stability||0), sc = s>60?'#4ecf8a':s>30?'#f5a623':'#e94560';
+    const g = Math.floor(st.gold||0);
+    return `<div class="aps"><div class="aps-t">현재 안정도</div>
+      <div style="font-size:38px;font-weight:bold;color:${sc};text-align:center;padding:8px 0;letter-spacing:2px">${s}</div>
+      <div class="apbpg" style="height:10px"><div class="apbpf" style="width:${s}%;background:${sc}"></div></div>
+      <div style="font-size:11px;color:#778;text-align:center;margin-top:6px">${s<30?'⚠ 위험 — 민란 발생 가능성 높음':s<60?'📊 보통 — 향상 권장':'✅ 양호'}</div>
+    </div>
+    <div class="aps"><div class="aps-t">안정도 향상 조치</div>
+      <button class="apb" onclick="AP._doStab(80,10,'🛕 사원 기원')" ${g<80?'disabled':''}>🛕 사원 기원 (+10)<span class="bc">💰 80</span></button>
+      <button class="apb" onclick="AP._doStab(50,7,'🎊 연회 개최')" ${g<50?'disabled':''}>🎊 연회 개최 (+7)<span class="bc">💰 50</span></button>
+      <button class="apb" onclick="AP._doStab(0,15,'📜 세금 감면')">📜 세금 감면 (+15)<span class="bc">무료</span></button>
+    </div>`;
+  }
+
+  /* ── 외교 패널 ── */
+  function _dipl() {
+    const facs = ['북방부족','남방','동방','해상세력'];
+    const cards = facs.map(f => {
+      const rel = (FactionManager.getRelation ? FactionManager.getRelation('고려',f) : 0) || 0;
+      const rc = rel>20?'#4ecf8a':rel>-20?'#f5a623':'#e94560';
+      const inWar = typeof WarSystem!=='undefined' && WarSystem.isAtWar('고려',f);
+      const g = Math.floor((FactionManager.getFactionState('고려')||{}).gold||0);
+      return `<div style="background:#0d1e3c;border:1px solid #1a3660;border-radius:5px;padding:8px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+          <span style="font-weight:bold;font-size:12px">${f}</span>
+          <span style="color:${rc};font-weight:bold;font-size:12px">${rel>0?'+':''}${rel}</span>
+        </div>
+        <div class="apbpg"><div class="apbpf" style="width:${(rel+100)/2}%;background:${rc}"></div></div>
+        <div style="display:flex;gap:4px;margin-top:6px">
+          <button class="apb" style="flex:1;margin-bottom:0;padding:5px;font-size:11px" onclick="AP._doGift('${f}')" ${g<40?'disabled':''}>
+            🎁 선물<span class="bc">💰40</span></button>
+          ${inWar
+            ? `<button class="apb" style="flex:1;margin-bottom:0;padding:5px;font-size:11px;border-color:#4ecf8a" onclick="WarSystem.makepeace('고려','${f}');AP.refresh();AlertSystem.refresh()">🕊 화평</button>`
+            : `<button class="apb" style="flex:1;margin-bottom:0;padding:5px;font-size:11px;border-color:#c03040;color:#f08090" onclick="WarSystem&&WarSystem.declareWar('고려','${f}');AP.refresh()">⚔ 선전<span class="bc">💰50</span></button>`
+          }
+        </div>
+      </div>`;
+    });
+    const wars = typeof WarSystem!=='undefined' ? WarSystem.getWars() : [];
+    const warInfo = wars.length ? `<div class="aps"><div class="aps-t">진행 중인 전쟁 (${wars.length}건)</div>
+      ${wars.map(w=>`<div class="apr"><span class="apl">${w.atk} vs ${w.def}</span><span class="apv neg">전쟁 중</span></div>`).join('')}
+    </div>` : '';
+    return `${warInfo}<div class="aps"><div class="aps-t">세력 관계도</div>${cards.join('')}</div>`;
+  }
+
+  /* ── 프로빈스 패널 ── */
+  function _provs() {
+    const provs = ProvinceManager.getFactionProvinces('고려');
+    return `<div class="aps"><div class="aps-t">고려 프로빈스 (${provs.length})</div>
+      ${provs.map(p=>`<div class="apr">
+        <span class="apl">${p.name} <small style="color:#2a3a4a">${p.terrain}</small></span>
+        <span class="apv" style="font-size:11px">${(p.population/10000).toFixed(1)}만 Lv${p.development}</span>
+      </div>`).join('')}
+    </div>`;
+  }
+
+  /* ── 내부 액션 ── */
+  function _doStab(cost, gain, label) {
+    const st = FactionManager.getFactionState('고려');
+    if (!st) return;
+    if (cost > 0 && (st.gold||0) < cost) { Notifications.push('💰 금화 부족!', 'alert'); return; }
+    if (cost > 0) st.gold -= cost;
+    st.stability = Math.min(100, (st.stability||0) + gain);
+    Notifications.push(`${label} — 안정도 +${gain}`, 'good');
+    AP.refresh(); AlertSystem.refresh();
+  }
+
+  function _doGift(target) {
+    const st = FactionManager.getFactionState('고려');
+    if (!st || (st.gold||0) < 40) { Notifications.push('💰 금화 40 필요!', 'alert'); return; }
+    st.gold -= 40;
+    if (FactionManager.modRelation) FactionManager.modRelation('고려', target, 10);
+    Notifications.push(`🎁 ${target}에 선물 — 관계+10`, 'good');
+    AP.refresh(); AlertSystem.refresh();
+  }
+
+  function _doAssignHeir() {
+    const ruler = CharacterManager.getRuler('고려');
+    if (!ruler) return;
+    let candidates = [];
+    if (typeof CharacterManager.getAll === 'function') {
+      candidates = CharacterManager.getAll().filter(c => c.faction==='고려' && c.id!==ruler.id && c.role!=='ruler' && c.role!=='heir');
+    }
+    if (!candidates.length) { Notifications.push('지정할 인물이 없습니다', 'warn'); return; }
+    candidates[0].role = 'heir';
+    Notifications.push(`👑 ${candidates[0].name} 후계자 지정`, 'good');
+    AP.refresh(); AlertSystem.refresh();
+  }
+
+  return { open, close, refresh, _doStab, _doGift, _doAssignHeir };
+})();
+
 window.addEventListener('load', () => {
   MapRenderer.init();
   Notifications.init();
@@ -4028,6 +4435,13 @@ window.addEventListener('load', () => {
 
   // 초기 세력 패널
   setTimeout(() => UI.showFactionPanel(), 100);
+
+  // AlertSystem 연결
+  GameCore.on('newMonth', function() {
+    AlertSystem.refresh();
+  });
+  setTimeout(function() { AlertSystem.refresh(); }, 2000);
+  setInterval(function() { AlertSystem.refresh(); }, 8000);
 });
 </script>
 <!-- ── 이벤트 팝업 오버레이 ── -->
@@ -4040,6 +4454,20 @@ window.addEventListener('load', () => {
     </div>
     <div id="event-desc"></div>
     <div id="event-choices"></div>
+  </div>
+</div>
+<!-- ── Alert Tray ── -->
+<div id="alert-tray"></div>
+
+<!-- ── Action Panel ── -->
+<div id="ap-overlay" style="display:none">
+  <div id="ap-panel">
+    <div id="ap-hd">
+      <span id="ap-icon-el"></span>
+      <span id="ap-title-el"></span>
+      <button id="ap-close-btn" onclick="AP.close()">✕</button>
+    </div>
+    <div id="ap-bd"></div>
   </div>
 </div>
 </body>
