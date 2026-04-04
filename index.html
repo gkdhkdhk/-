@@ -4198,6 +4198,49 @@ const AlertSystem = (() => {
       },
       action: 'open_trade',
     },
+    {
+      id: 'at_war',
+      icon: '⚔',
+      text: '전쟁 중',
+      detail: '현재 전쟁이 진행 중입니다. 외교 패널에서 강화조약을 제의하세요.',
+      priority: 'high',
+      check: () => {
+        try {
+          return WarSystem.getWars().some(w => w.attacker === '고려' || w.defender === '고려');
+        } catch(e) { return false; }
+      },
+      action: 'open_diplomacy',
+    },
+    {
+      id: 'occupied_province',
+      icon: '🏴',
+      text: '영토 점령됨',
+      detail: '우리 영토가 적에게 점령되었습니다. 외교 패널을 확인하세요.',
+      priority: 'high',
+      check: () => {
+        try {
+          const occs = WarSystem.getOccupations();
+          return Object.entries(occs).some(([pid, o]) => {
+            const p = ProvinceManager.getById(pid);
+            return p && p.faction === '고려' && o.occupiedBy !== '고려';
+          });
+        } catch(e) { return false; }
+      },
+      action: 'open_diplomacy',
+    },
+    {
+      id: 'paying_tribute',
+      icon: '💸',
+      text: '조공 납부 중',
+      detail: '매월 금화를 조공으로 납부하고 있습니다.',
+      priority: 'medium',
+      check: () => {
+        try {
+          return WarSystem.getTributes().some(t => t.payer === '고려');
+        } catch(e) { return false; }
+      },
+      action: 'open_diplomacy',
+    },
   ];
 
   let activeAlerts = [];
@@ -4441,11 +4484,36 @@ const ActionPanels = (() => {
       const warButtons = factions.map(f => {
         const atWar = WarSystem.isAtWar('고려', f);
         if (atWar) {
+          const score = WarSystem.getWarScore(
+            WarSystem.getWar('고려', f) ? '고려' : f,
+            WarSystem.getWar('고려', f) ? f : '고려'
+          );
+          const myScore    = WarSystem.getWar('고려', f) ? score.atk : score.def;
+          const theirScore = WarSystem.getWar('고려', f) ? score.def : score.atk;
+          const war = WarSystem.getWar('고려', f) || WarSystem.getWar(f, '고려');
+          const duration = WarSystem.getCurrentMonth() - (war ? war.startMonth : 0);
+          const scoreColor = myScore > theirScore ? '#4ecf8a' : myScore < theirScore ? '#e94560' : '#f5a623';
           return `
-            <button class="ap-action-btn" style="border-color:#4ecf8a" onclick="WarSystem.makePeace('고려','${f}');ActionPanels.openDiplomacy()">
-              <span>🕊</span> ${f}와 평화 협정
-              <span class="btn-cost">관계 +10</span>
-            </button>
+            <div style="background:#0f2040;border:1px solid #2a3a60;border-radius:6px;padding:8px;margin-bottom:8px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <span style="font-size:12px;font-weight:bold">⚔ vs ${f}</span>
+                <span style="font-size:12px;color:${scoreColor}">${myScore} : ${theirScore}</span>
+              </div>
+              <div style="font-size:10px;color:#6a8aaa;margin-bottom:6px">
+                목표: ${war && war.warGoal ? (war.warGoal.type === 'annex' ? '합병' : war.warGoal.type === 'tribute' ? '조공' : '할양') : '조공'} | 경과: ${duration}개월
+              </div>
+              <div style="display:flex;gap:4px;margin-bottom:4px">
+                <button class="ap-action-btn" style="flex:1;border-color:#4ecf8a;font-size:11px" onclick="WarSystem.offerPeace('고려','${f}',{type:'white_peace'});ActionPanels.openDiplomacy()">
+                  🕊 백색강화
+                </button>
+                <button class="ap-action-btn" style="flex:1;font-size:11px" onclick="WarSystem.offerPeace('${f}','고려',{type:'tribute'});ActionPanels.openDiplomacy()">
+                  💰 조공 강화
+                </button>
+              </div>
+              <button class="ap-action-btn" style="font-size:11px" onclick="(function(){const provs=ProvinceManager.getFactionProvinces('${f}');const p=provs[Math.floor(Math.random()*provs.length)];if(p)WarSystem.tryOccupy('고려',p.id);ActionPanels.openDiplomacy();})()">
+                🏴 프로빈스 점령 시도 (랜덤)
+              </button>
+            </div>
           `;
         }
         return `
@@ -4455,10 +4523,52 @@ const ActionPanels = (() => {
           </button>
           <button class="ap-action-btn" style="border-color:#e94560" onclick="WarSystem.declareWar('고려','${f}');ActionPanels.openDiplomacy()">
             <span>⚔</span> ${f}에 전쟁 선포
-            <span class="btn-cost">💰 50, 위신-5</span>
+            <span class="btn-cost">💰 50, 관계-30</span>
           </button>
         `;
       });
+
+      // 조공 현황
+      const tributes = WarSystem.getTributes();
+      const tributeSection = tributes.length > 0 ? `
+        <div class="ap-section">
+          <div class="ap-section-title">💰 조공 계약</div>
+          ${tributes.map(t => `
+            <div class="ap-row">
+              <span class="ap-label">${t.payer} → ${t.receiver}</span>
+              <span class="ap-value ${t.payer === '고려' ? 'negative' : 'positive'}">${t.amount}💰 × ${t.monthsLeft}개월 남음</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : '';
+
+      // 점령지 현황
+      const occs = WarSystem.getOccupations();
+      const myOccs = Object.entries(occs).filter(([, o]) => o.occupiedBy === '고려');
+      const enemyOccs = Object.entries(occs).filter(([pid, o]) => {
+        const p = ProvinceManager.getById(pid);
+        return p && p.faction === '고려' && o.occupiedBy !== '고려';
+      });
+      const occSection = (myOccs.length > 0 || enemyOccs.length > 0) ? `
+        <div class="ap-section">
+          <div class="ap-section-title">🏴 점령 현황</div>
+          ${myOccs.map(([pid, o]) => {
+            const p = ProvinceManager.getById(pid);
+            return `<div class="ap-row">
+              <span class="ap-label">점령 중: ${p ? p.name : pid}</span>
+              <span class="ap-value positive">${WarSystem.getCurrentMonth() - o.since}개월째</span>
+            </div>`;
+          }).join('')}
+          ${enemyOccs.map(([pid, o]) => {
+            const p = ProvinceManager.getById(pid);
+            return `<div class="ap-row">
+              <span class="ap-label">점령당함: ${p ? p.name : pid}</span>
+              <span class="ap-value negative">${o.occupiedBy}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      ` : '';
+
       return `
         <div class="ap-section">
           <div class="ap-section-title">세력 관계도</div>
@@ -4468,6 +4578,8 @@ const ActionPanels = (() => {
           <div class="ap-section-title">외교 행동</div>
           ${warButtons.join('')}
         </div>
+        ${tributeSection}
+        ${occSection}
       `;
     });
   }
@@ -4604,61 +4716,225 @@ const ActionPanels = (() => {
 })();
 
 /* ════════════════════════════════════════════════════════
-   WarSystem — M08 전쟁/점령 시스템
+   WarSystem — M08 전쟁 목표 + 영토 점령 + 강화조약
 ════════════════════════════════════════════════════════ */
 const WarSystem = (() => {
   "use strict";
-  let activeWars = [];
-  const WAR_COST = 50;
 
-  function declareWar(attackerId, defenderId, claimProvinceId) {
-    const st = FactionManager.getFactionState(attackerId);
-    if (!st || st.gold < WAR_COST) {
-      Notifications.push('전쟁 선포에 금화 50이 필요합니다', 'alert');
+  // 진행 중인 전쟁: { id, attacker, defender, warGoal, startMonth, battleWins:{atk,def} }
+  const _wars = [];
+  // 점령 상태: { provinceId → { occupiedBy, since } }
+  const _occupations = {};
+  // 조공 계약: [{ payer, receiver, amount, monthsLeft }]
+  const _tributes = [];
+
+  let _currentMonth = 0;
+
+  function _wardId(a, d) { return `${a}:${d}`; }
+
+  function _goalText(g) {
+    if (!g) return '조공';
+    if (g.type === 'annex')    return '합병';
+    if (g.type === 'tribute')  return '조공';
+    if (g.type === 'province') return `프로빈스 ${g.targetProvinceId} 할양`;
+    return g.type;
+  }
+
+  // ── 전쟁 선포 ──
+  function declareWar(attacker, defender, warGoal) {
+    warGoal = warGoal || { type: 'tribute' };
+    if (isAtWar(attacker, defender)) return false;
+
+    const atkSt = FactionManager.getFactionState(attacker);
+    if (!atkSt || atkSt.gold < 50) {
+      Notifications.push('⚔ 전쟁 선포 불가: 금화 부족 (50 필요)', 'alert');
       return false;
     }
-    st.gold -= WAR_COST;
-    st.prestige -= 5;
-    if (FactionManager.modRelation) FactionManager.modRelation(attackerId, defenderId, -30);
-    activeWars.push({
-      attackerId,
-      defenderId,
-      startMonth: GameCore.getState().month,
-      claimedProvinces: claimProvinceId ? [claimProvinceId] : [],
+    FactionManager.addGold(attacker, -50);
+    FactionManager.modRelation(attacker, defender, -30);
+
+    _wars.push({
+      id: _wardId(attacker, defender),
+      attacker, defender, warGoal,
+      startMonth: _currentMonth,
+      battleWins: { atk: 0, def: 0 },
     });
-    Notifications.push(`⚔ ${attackerId}가 ${defenderId}에 전쟁을 선포했습니다!`, 'alert');
-    AlertSystem.refresh();
+
+    Notifications.push(`⚔ ${attacker} → ${defender} 전쟁 선포! (목표: ${_goalText(warGoal)})`, 'alert');
+    if (typeof AlertSystem !== 'undefined') AlertSystem.refresh();
+
+    // 교역로 차단
+    if (typeof TradeRouteManager !== 'undefined') {
+      TradeRouteManager.getRoutes().forEach(r => {
+        if ((r.from === attacker && r.to === defender) || (r.from === defender && r.to === attacker))
+          TradeRouteManager.blockRoute && TradeRouteManager.blockRoute(r.id);
+      });
+    }
     return true;
   }
 
-  function tryOccupy(divisionId, provinceId) {
-    const prov = ProvinceManager.getById(provinceId);
-    if (!prov) return;
-    const division = typeof MilitaryManager !== 'undefined' ? MilitaryManager.getDivisionById(divisionId) : null;
-    if (!division) return;
-    const oldFaction = prov.faction;
-    prov.faction = division.factionId;
-    Notifications.push(`🚩 ${prov.name} 점령! (${oldFaction} → ${division.factionId})`, 'good');
-    if (typeof MapRenderer !== 'undefined' && MapRenderer.markDirty) MapRenderer.markDirty();
-    AlertSystem.refresh();
+  // ── 점령 시도 (세력 기반) ──
+  function tryOccupy(attackerFaction, provinceId) {
+    const province = ProvinceManager.getById(provinceId);
+    if (!province) return false;
+    const defender = province.faction;
+    if (!isAtWar(attackerFaction, defender)) return false;
+    if (_occupations[provinceId] && _occupations[provinceId].occupiedBy === attackerFaction) return false;
+
+    // 군사력: 주둔군 전투력 또는 기본값 100
+    const atkMil = typeof MilitaryManager !== 'undefined'
+      ? (MilitaryManager.getGarrisonPower ? ProvinceManager.getFactionProvinces(attackerFaction).reduce((s, p) => s + MilitaryManager.getGarrisonPower(p.id), 0) + 100 : 100)
+      : 100;
+    const defMil = typeof MilitaryManager !== 'undefined'
+      ? (MilitaryManager.getGarrisonPower ? MilitaryManager.getGarrisonPower(provinceId) + 100 : 100)
+      : 100;
+
+    if (atkMil > defMil * 0.7) {
+      _occupations[provinceId] = { occupiedBy: attackerFaction, since: _currentMonth };
+      const war = getWar(attackerFaction, defender) || getWar(defender, attackerFaction);
+      if (war && war.attacker === attackerFaction) war.battleWins.atk++;
+      Notifications.push(`🏴 ${attackerFaction}: ${province.name} 점령 성공!`, 'good');
+      if (typeof MapRenderer !== 'undefined' && MapRenderer.markDirty) MapRenderer.markDirty();
+      if (typeof AlertSystem !== 'undefined') AlertSystem.refresh();
+      return true;
+    } else {
+      const defWar = getWar(defender, attackerFaction) || getWar(attackerFaction, defender);
+      if (defWar && defWar.defender === attackerFaction) defWar.battleWins.def++;
+      Notifications.push(`🛡 ${province.name} 점령 실패 (방어 성공)`, '');
+      return false;
+    }
   }
 
-  function makePeace(attackerId, defenderId) {
-    activeWars = activeWars.filter(w => !(w.attackerId === attackerId && w.defenderId === defenderId));
-    if (FactionManager.modRelation) FactionManager.modRelation(attackerId, defenderId, 10);
-    Notifications.push(`🕊 ${attackerId}와 ${defenderId}가 평화 협정을 맺었습니다`, 'good');
-    AlertSystem.refresh();
+  // ── 전쟁 점수 ──
+  function getWarScore(attackerFaction, defenderFaction) {
+    const war = getWar(attackerFaction, defenderFaction);
+    if (!war) return { atk: 0, def: 0 };
+    const atkOccupied = Object.values(_occupations).filter(o => o.occupiedBy === attackerFaction).length;
+    const defOccupied = Object.values(_occupations).filter(o => o.occupiedBy === defenderFaction).length;
+    return {
+      atk: atkOccupied * 10 + (war.battleWins.atk || 0) * 5,
+      def: defOccupied * 10 + (war.battleWins.def || 0) * 5,
+    };
   }
 
-  function getActiveWars() { return activeWars; }
-  function isAtWar(fId1, fId2) {
-    return activeWars.some(w =>
-      (w.attackerId === fId1 && w.defenderId === fId2) ||
-      (w.attackerId === fId2 && w.defenderId === fId1)
-    );
+  // ── 강화조약 ──
+  function offerPeace(from, to, terms) {
+    terms = terms || { type: 'white_peace' };
+    const war = getWar(from, to) || getWar(to, from);
+    if (!war) return false;
+
+    _removeWar(from, to);
+
+    if (terms.type === 'white_peace') {
+      _returnOccupied(from, to);
+      FactionManager.modRelation(from, to, 10);
+      Notifications.push(`🕊 ${from} ↔ ${to} 백색 강화 체결`, 'good');
+    } else if (terms.type === 'tribute') {
+      _returnOccupied(from, to);
+      _tributes.push({ payer: from, receiver: to, amount: 20, monthsLeft: 6 });
+      FactionManager.modRelation(to, from, -20);
+      Notifications.push(`💰 ${from} → ${to} 조공 강화 (6개월, 20💰/월)`, 'good');
+    } else if (terms.type === 'annexation') {
+      const provinces = terms.provinces || Object.keys(_occupations).filter(pid => {
+        return _occupations[pid] && _occupations[pid].occupiedBy === to;
+      });
+      provinces.forEach(pid => {
+        const p = ProvinceManager.getById(pid);
+        if (p) {
+          p.faction = to;
+          delete _occupations[pid];
+        }
+      });
+      FactionManager.modRelation(from, to, -50);
+      Notifications.push(`🏴 ${from}: ${provinces.length}개 프로빈스 할양 → ${to}`, 'alert');
+      if (typeof MapRenderer !== 'undefined' && MapRenderer.markDirty) MapRenderer.markDirty();
+    }
+
+    if (typeof AlertSystem !== 'undefined') AlertSystem.refresh();
+    return true;
   }
 
-  return { declareWar, tryOccupy, makePeace, getActiveWars, isAtWar };
+  function makePeace(a, b) { return offerPeace(a, b, { type: 'white_peace' }); }
+
+  function _returnOccupied(a, b) {
+    Object.keys(_occupations).forEach(pid => {
+      const o = _occupations[pid];
+      if (o.occupiedBy === a || o.occupiedBy === b) delete _occupations[pid];
+    });
+  }
+
+  function _removeWar(a, b) {
+    const idx = _wars.findIndex(w =>
+      (w.attacker === a && w.defender === b) || (w.attacker === b && w.defender === a));
+    if (idx !== -1) _wars.splice(idx, 1);
+  }
+
+  // ── AI 자동 강화 ──
+  function checkAutopeace() {
+    [..._wars].forEach(w => {
+      const score = getWarScore(w.attacker, w.defender);
+      if (score.atk - score.def > 50) {
+        offerPeace(w.defender, w.attacker, { type: 'tribute' });
+      } else if (score.def - score.atk > 50) {
+        offerPeace(w.attacker, w.defender, { type: 'tribute' });
+      } else {
+        const duration = _currentMonth - w.startMonth;
+        if (duration > 12) offerPeace(w.attacker, w.defender, { type: 'white_peace' });
+      }
+    });
+  }
+
+  // ── 조공 월별 처리 ──
+  function processTributes() {
+    for (let i = _tributes.length - 1; i >= 0; i--) {
+      const t = _tributes[i];
+      if (t.monthsLeft <= 0) { _tributes.splice(i, 1); continue; }
+      FactionManager.addGold(t.payer, -t.amount);
+      FactionManager.addGold(t.receiver, t.amount);
+      t.monthsLeft--;
+      if (t.monthsLeft === 0)
+        Notifications.push(`✅ ${t.payer} → ${t.receiver} 조공 완료`, 'good');
+    }
+  }
+
+  // ── 점령지 수입 처리 ──
+  function processOccupationIncome() {
+    Object.entries(_occupations).forEach(([pid, occ]) => {
+      const p = ProvinceManager.getById(pid);
+      if (!p) return;
+      const income = Math.floor((p.development || 1) * 4);
+      FactionManager.addGold(occ.occupiedBy, income);
+    });
+  }
+
+  // ── 월별 종합 처리 ──
+  function onMonthTick(month) {
+    _currentMonth = (month !== undefined) ? month : (_currentMonth + 1);
+    processTributes();
+    processOccupationIncome();
+    checkAutopeace();
+  }
+
+  function getWar(a, b) {
+    return _wars.find(w => w.attacker === a && w.defender === b);
+  }
+
+  function isAtWar(a, b) {
+    return _wars.some(w =>
+      (w.attacker === a && w.defender === b) || (w.attacker === b && w.defender === a));
+  }
+
+  function getWars()       { return [..._wars]; }
+  function getActiveWars() { return [..._wars]; } // 하위 호환
+  function getOccupations() { return { ..._occupations }; }
+  function getTributes()    { return [..._tributes]; }
+  function getCurrentMonth() { return _currentMonth; }
+
+  return {
+    declareWar, tryOccupy, getWarScore, offerPeace, makePeace,
+    checkAutopeace, onMonthTick, isAtWar, getWar, getWars, getActiveWars,
+    getOccupations, getTributes, getCurrentMonth,
+  };
 })();
 
 /* ════════════════════════════════════════════════════════
@@ -4795,6 +5071,7 @@ window.addEventListener('load', () => {
     EconomyEngine.onMonthTick();
     EventEngine.checkEvents();
     TradeRouteManager.onMonthTick();
+    WarSystem.onMonthTick(GameCore.getState().month);
     updateResourceBar();
     const el = document.getElementById('trade-income-display');
     if (el) el.textContent = `🛤 +${TradeRouteManager.calcMonthlyIncome()}/월`;
