@@ -506,6 +506,133 @@
     box-shadow: 0 0 12px rgba(76,175,80,0.4);
   }
   #oneclick-start-btn:disabled { cursor: default; opacity: 0.65; }
+
+  /* ── 전투 오버레이 카드 ── */
+  .battle-card {
+    position: absolute;
+    background: rgba(10, 15, 30, 0.93);
+    border: 2px solid #e94560;
+    border-radius: 8px;
+    padding: 8px 10px;
+    min-width: 200px;
+    max-width: 240px;
+    cursor: pointer;
+    z-index: 15;
+    transition: transform 0.1s, box-shadow 0.1s;
+    animation: battlePulse 2s ease-in-out infinite;
+    pointer-events: all;
+    user-select: none;
+  }
+  .battle-card:hover {
+    transform: scale(1.04);
+    box-shadow: 0 0 18px rgba(233,69,96,0.5);
+    z-index: 20;
+  }
+  .battle-card.siege {
+    border-color: #f5a623;
+    animation: siegePulse 2.5s ease-in-out infinite;
+  }
+  .battle-card-title {
+    font-size: 11px;
+    font-weight: bold;
+    color: #f5a623;
+    margin-bottom: 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .battle-card-title .battle-day {
+    font-size: 9px;
+    color: #6a8aaa;
+  }
+  .battle-vs-row {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-bottom: 4px;
+  }
+  .battle-bar {
+    height: 14px;
+    border-radius: 2px;
+    transition: width 0.5s ease;
+    min-width: 4px;
+  }
+  .battle-bar.attacker { background: linear-gradient(90deg,#e94560,#c43050); border-radius: 3px 0 0 3px; }
+  .battle-bar.defender { background: linear-gradient(90deg,#2563c7,#1a4aaa); border-radius: 0 3px 3px 0; }
+  .battle-vs-center {
+    font-size: 9px;
+    color: #556;
+    flex-shrink: 0;
+    font-weight: bold;
+  }
+  .battle-card-footer {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    color: #4a6a8a;
+    margin-top: 4px;
+  }
+  .battle-forces {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    margin-bottom: 2px;
+  }
+  .battle-forces .att { font-weight: bold; }
+  .battle-forces .def { font-weight: bold; }
+  .siege-bar-bg {
+    background: #0a1020;
+    border-radius: 3px;
+    height: 8px;
+    overflow: hidden;
+    border: 1px solid #2a3a50;
+    margin: 4px 0;
+  }
+  .siege-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg,#f5a623,#e94560);
+    transition: width 0.5s ease;
+  }
+  @keyframes battlePulse {
+    0%,100% { box-shadow: 0 0 8px rgba(233,69,96,0.3); border-color: #e94560; }
+    50%      { box-shadow: 0 0 20px rgba(233,69,96,0.7); border-color: #ff6080; }
+  }
+  @keyframes siegePulse {
+    0%,100% { box-shadow: 0 0 8px rgba(245,166,35,0.3); border-color: #f5a623; }
+    50%      { box-shadow: 0 0 20px rgba(245,166,35,0.7); border-color: #ffcc44; }
+  }
+  /* 전투 상세 패널 */
+  .battle-detail-section { margin-bottom: 12px; }
+  .battle-log-item {
+    font-size: 10px;
+    color: #6a8aaa;
+    padding: 2px 0;
+    border-bottom: 1px solid #0f1a2e;
+    line-height: 1.5;
+  }
+  .battle-log-item::before { content: '• '; color: #3a5a7a; }
+  .unit-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    padding: 2px 0;
+    border-bottom: 1px solid #0f1a2e;
+  }
+  .unit-row .unit-name { color: #8090a0; }
+  .unit-row .unit-att  { color: #e94560; font-weight: bold; text-align: right; }
+  .unit-row .unit-def  { color: #5a8ad0; font-weight: bold; text-align: right; }
+  .power-compare {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 0;
+    margin-top: 4px;
+  }
+  .power-bar-wrap { flex: 1; }
+  .power-bar-bg { height: 10px; background: #0a1020; border-radius: 5px; overflow: hidden; border: 1px solid #1a2a40; display:flex; }
+  .power-att-fill { height: 100%; background: linear-gradient(90deg,#e94560,#c43050); border-radius: 5px 0 0 5px; }
+  .power-def-fill { height: 100%; background: linear-gradient(90deg,#2563c7,#1a4aaa); border-radius: 0 5px 5px 0; }
 </style>
 </head>
 <body>
@@ -579,6 +706,7 @@
     </div>
     <div id="sidebar-body">
       <div id="province-panel" style="display:none"></div>
+      <div id="battle-panel" style="display:none"></div>
       <div id="faction-panel" style="display:none">
         <div class="info-section">
           <h4>세력 목록</h4>
@@ -604,7 +732,7 @@
   <span id="status-selected">선택: 없음</span>
   <span id="status-battles">전투: 0건</span>
   <span id="status-faction-res" style="color:#f5a623;font-size:10px"></span>
-  <span style="margin-left:auto;color:#445">Phase 3 — M01~M07</span>
+  <span style="margin-left:auto;color:#445">Phase 4 — M01~M07 + BattleOverlay</span>
 </div>
 
 
@@ -1100,6 +1228,10 @@ const MapRenderer = (() => {
 
   // ── 메인 렌더 ──
   function render() {
+    // 전투 진행 중이면 항상 리렌더 (펄싱 애니메이션)
+    if (typeof BattleManager !== 'undefined' && BattleManager.getAll().length > 0) {
+      needsRedraw = true;
+    }
     if (!needsRedraw) return;
     needsRedraw = false;
 
@@ -1234,6 +1366,65 @@ const MapRenderer = (() => {
     ctx.textAlign = 'left';
     ctx.fillText(getModeLabel(), 8, canvas.height - 8);
     ctx.restore();
+
+    // 6.5단계: 전투 중인 프로빈스 상태 아이콘
+    if (typeof BattleManager !== 'undefined') {
+      const activeBattles = BattleManager.getAll();
+      activeBattles.forEach(b => {
+        const p = ProvinceManager.getById(b.provinceId);
+        if (!p) return;
+        const [cx, cy] = polyCenter(p.poly);
+        if (cx < -20 || cx > canvas.width + 20 || cy < -20 || cy > canvas.height + 20) return;
+        const alpha = 0.6 + 0.4 * Math.sin(Date.now() / 400);
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.font = `bold ${Math.max(12, 14 * scale)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(b.type === 'siege' ? '🏰' : '⚔', cx, cy + 20 * scale);
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      });
+    }
+
+    // 6.75단계: 사단 이동 화살표
+    if (typeof MilitaryManager !== 'undefined') {
+      const allDivs = MilitaryManager.getAllDivisions();
+      allDivs.filter(d => d.state === 'moving' && d.targetId).forEach(div => {
+        const src = ProvinceManager.getById(div.locationId);
+        const dst = ProvinceManager.getById(div.targetId);
+        if (!src || !dst) return;
+        const [sx, sy] = polyCenter(src.poly);
+        const [ex, ey] = polyCenter(dst.poly);
+        const fDef = ProvinceManager.getFaction(div.factionId);
+        const fColor = fDef ? fDef.color : '#aaa';
+        ctx.save();
+        ctx.globalAlpha = 0.55;
+        ctx.strokeStyle = fColor;
+        ctx.lineWidth = 2 * scale;
+        ctx.setLineDash([5 * scale, 4 * scale]);
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // 화살촉
+        const angle = Math.atan2(ey - sy, ex - sx);
+        const al = 8 * scale;
+        ctx.fillStyle = fColor;
+        ctx.beginPath();
+        ctx.moveTo(ex, ey);
+        ctx.lineTo(ex - al * Math.cos(angle - 0.4), ey - al * Math.sin(angle - 0.4));
+        ctx.lineTo(ex - al * Math.cos(angle + 0.4), ey - al * Math.sin(angle + 0.4));
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      });
+    }
+
+    // 배틀 오버레이 카드 위치 업데이트
+    if (typeof BattleOverlay !== 'undefined') BattleOverlay.reposition();
   }
 
   function getModeLabel() {
@@ -1346,7 +1537,7 @@ const MapRenderer = (() => {
     GameCore.on('tick', () => { needsRedraw = true; });
   }
 
-  return { render, setMode, markDirty, init };
+  return { render, setMode, markDirty, init, polyCenter };
 })();
 
 
@@ -1378,6 +1569,8 @@ const UI = (() => {
     document.getElementById('empty-hint').style.display = 'none';
     document.getElementById('province-panel').style.display = 'none';
     document.getElementById('faction-panel').style.display = 'none';
+    const bp = document.getElementById('battle-panel');
+    if (bp) bp.style.display = 'none';
   }
   function showEmpty() {
     setHeader('🗺','프로빈스를 클릭하세요');
@@ -1618,7 +1811,110 @@ const UI = (() => {
 
   function clearProvince() { showEmpty(); }
 
-  return { showProvince, clearProvince, showFactionPanel, _switchProvTab };
+  // ── 전투 상세 패널 ──
+  function showBattleDetail(battleId) {
+    const b = BattleManager.getById(battleId);
+    if (!b) return;
+    hideAll();
+    const prov    = ProvinceManager.getById(b.provinceId);
+    const name    = prov ? prov.name : `P${b.provinceId}`;
+    const terrain = prov ? ProvinceManager.getTerrain(prov.terrain) : null;
+    const atkF    = ProvinceManager.getFaction(b.attackFaction);
+    const defF    = ProvinceManager.getFaction(b.defendFaction);
+    const atkRuler = CharacterManager.getRuler(b.attackFaction);
+    const defRuler = CharacterManager.getRuler(b.defendFaction);
+    const atkStats = atkRuler ? CharacterManager.getEffectiveStats(atkRuler) : null;
+    const defStats = defRuler ? CharacterManager.getEffectiveStats(defRuler) : null;
+    const typeLabel = b.type === 'siege' ? '공성전' : '전투';
+
+    setHeader('⚔', `${name} ${typeLabel}`);
+    const panel = document.getElementById('battle-panel');
+    panel.style.display = 'block';
+
+    const logHTML = b.log.slice(-8).map(l =>
+      `<div class="battle-log-item">${l}</div>`).join('');
+
+    const atkPowFmt = b.attackPower ? Math.round(b.attackPower).toLocaleString() : '계산 중';
+    const defPowFmt = b.defendPower ? Math.round(b.defendPower).toLocaleString() : '계산 중';
+    const total     = (b.attackPower || 1) + (b.defendPower || 1);
+    const atkBarPct = Math.round((b.attackPower || 0) / total * 100) || 50;
+    const defBarPct = 100 - atkBarPct;
+
+    panel.innerHTML = `
+      <div class="battle-detail-section">
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px;align-items:center">
+          <div style="color:${atkF?atkF.color:'#e94560'};font-weight:bold;font-size:12px">[공격] ${b.attackFaction}</div>
+          <div style="color:#f5a623;font-size:11px">${b.day}일째</div>
+          <div style="color:${defF?defF.color:'#5a8ad0'};font-weight:bold;font-size:12px">${b.defendFaction} [방어]</div>
+        </div>
+        ${b.type === 'siege' ? `
+        <div class="info-section">
+          <h4>공성 진행</h4>
+          <div class="siege-bar-bg" style="height:12px;margin:6px 0">
+            <div class="siege-bar-fill" style="width:${Math.round(b.siegePct)}%"></div>
+          </div>
+          <div class="info-row">
+            <span class="label">진행률</span>
+            <span class="value" style="color:#f5a623">${Math.round(b.siegePct)}%</span>
+          </div>
+        </div>` : ''}
+        <div class="info-section">
+          <h4>병력 현황</h4>
+          <div class="unit-row" style="font-size:10px;color:#6a8aaa">
+            <span class="unit-name">병종</span>
+            <span class="unit-att">공격</span>
+            <span class="unit-def">방어</span>
+          </div>
+          <div class="unit-row">
+            <span class="unit-name">보병</span>
+            <span class="unit-att">${(b.attackUnits.infantry||0).toLocaleString()}</span>
+            <span class="unit-def">${(b.defendUnits.infantry||0).toLocaleString()}</span>
+          </div>
+          <div class="unit-row">
+            <span class="unit-name">기병</span>
+            <span class="unit-att">${(b.attackUnits.cavalry||0).toLocaleString()}</span>
+            <span class="unit-def">${(b.defendUnits.cavalry||0).toLocaleString()}</span>
+          </div>
+          <div class="unit-row">
+            <span class="unit-name">궁수</span>
+            <span class="unit-att">${(b.attackUnits.archers||0).toLocaleString()}</span>
+            <span class="unit-def">${(b.defendUnits.archers||0).toLocaleString()}</span>
+          </div>
+          <div class="unit-row" style="margin-top:4px;border-top:1px solid #1a3050">
+            <span class="unit-name" style="color:#a0b0c0">합계</span>
+            <span class="unit-att">${b.attackUnits.total.toLocaleString()}</span>
+            <span class="unit-def">${b.defendUnits.total.toLocaleString()}</span>
+          </div>
+        </div>
+        <div class="info-section">
+          <h4>전투력 비교</h4>
+          <div class="power-compare">
+            <span style="color:${atkF?atkF.color:'#e94560'};font-size:11px;min-width:52px">${atkPowFmt}</span>
+            <div class="power-bar-wrap">
+              <div class="power-bar-bg">
+                <div class="power-att-fill" style="width:${atkBarPct}%"></div>
+                <div class="power-def-fill" style="width:${defBarPct}%"></div>
+              </div>
+            </div>
+            <span style="color:${defF?defF.color:'#5a8ad0'};font-size:11px;min-width:52px;text-align:right">${defPowFmt}</span>
+          </div>
+        </div>
+        ${terrain ? `
+        <div class="info-section">
+          <h4>전장 환경</h4>
+          <div class="info-row"><span class="label">지형</span><span class="value">${terrain.icon} ${terrain.name}</span></div>
+          <div class="info-row"><span class="label">방어 보정</span><span class="value" style="color:#f5a623">×${terrain.defMod}</span></div>
+          ${atkRuler ? `<div class="info-row"><span class="label">${b.attackFaction} 지휘관</span><span class="value">${atkRuler.name} (무력 ${atkStats?atkStats.martial:'?'})</span></div>` : ''}
+          ${defRuler ? `<div class="info-row"><span class="label">${b.defendFaction} 지휘관</span><span class="value">${defRuler.name} (무력 ${defStats?defStats.martial:'?'})</span></div>` : ''}
+        </div>` : ''}
+        <div class="battle-detail-section">
+          <h4 style="color:#f5a623;font-size:11px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #1a4a7a;padding-bottom:3px;margin-bottom:6px">전투 로그</h4>
+          ${logHTML || '<div style="color:#445;font-size:11px">로그 없음</div>'}
+        </div>
+      </div>`;
+  }
+
+  return { showProvince, clearProvince, showFactionPanel, showBattleDetail, _switchProvTab };
 })();
 
 
@@ -2378,6 +2674,7 @@ const MilitaryManager = (() => {
     initGarrison, initAIDivisions,
     createDivision, moveDivision,
     getDivisionById, getDivisionsAt, getDivisionsByFaction,
+    getAllDivisions: () => _divisions,
     getGarrison, getGarrisonPower, calcDivisionPower,
     onTick, onMonthUpkeep,
     setDivisionState, updateDivision, disbandDivision,
@@ -2595,8 +2892,366 @@ const CombatEngine = (() => {
 
 
 /* ════════════════════════════════════════════════════════
-   NOTIFICATIONS — 알림 피드 (맵 우하단)
+   BATTLE MANAGER — 다중 일수 전투 진행 관리 (Phase 4)
+   전투 시작, 매일 전투 진행, 승패 처리
 ════════════════════════════════════════════════════════ */
+const BattleManager = (() => {
+  "use strict";
+
+  const MIN_UNITS               = 50;   // 이 수치 이하면 패배 처리
+  const ATTACKER_LOSS_RATE      = 0.03; // 공격측 일일 손실률 (방어력 대비)
+  const DEFENDER_LOSS_RATE      = 0.025;// 방어측 일일 손실률 (공격력 대비)
+  const COMBAT_VARIANCE_MIN     = 0.7;  // 전투 랜덤 분산 하한
+  const COMBAT_VARIANCE_RANGE   = 0.6;  // 전투 랜덤 분산 범위 (합: 0.7~1.3 = ±30%)
+  const POWER_ADVANTAGE_THRESH  = 1.3;  // 30% 우세 시 전선 압박 로그 발생
+  const BATTLE_LOG_INTERVAL     = 2;    // 일반 전투 로그 간격 (일)
+  const SIEGE_LOG_INTERVAL      = 3;    // 공성 로그 간격 (일)
+  const SIEGE_DEFENSE_BUFFER    = 500;  // 공성 진행 분모 완충값
+  const SIEGE_PROGRESS_MULT     = 3;    // 공성 일일 진행 배율
+
+  let _battles = [];
+  let _nextId   = 1;
+
+  // ── 유닛 합산 ──
+  function _totalUnits(u) {
+    return (u.infantry||0) + (u.cavalry||0) + (u.archers||0) + (u.siege||0);
+  }
+
+  // ── 비율 손실 적용 ──
+  function _applyLoss(units, loss) {
+    const total = units.total;
+    if (total <= 0 || loss <= 0) return { ...units };
+    const newTotal = Math.max(0, total - loss);
+    const ratio    = newTotal / total;
+    return {
+      infantry: Math.max(0, Math.round((units.infantry||0) * ratio)),
+      cavalry:  Math.max(0, Math.round((units.cavalry ||0) * ratio)),
+      archers:  Math.max(0, Math.round((units.archers ||0) * ratio)),
+      siege:    Math.max(0, Math.round((units.siege   ||0) * ratio)),
+      total:    newTotal,
+    };
+  }
+
+  // ── battleStart 이벤트 핸들러 ──
+  function startBattle({ attackerDivId, defenderInfo, provinceId }) {
+    const atkDiv = MilitaryManager.getDivisionById(attackerDivId);
+    if (!atkDiv) return;
+    const prov = ProvinceManager.getById(provinceId);
+    if (!prov) { MilitaryManager.setDivisionState(attackerDivId, 'idle'); return; }
+
+    let defUnitsRaw, defFaction;
+    if (defenderInfo.type === 'garrison') {
+      const g = MilitaryManager.getGarrison(provinceId);
+      if (!g) { MilitaryManager.setDivisionState(attackerDivId, 'idle'); return; }
+      defUnitsRaw = { infantry:g.infantry, cavalry:g.cavalry, archers:g.archers, siege:g.siege };
+      defFaction  = g.factionId;
+    } else {
+      const defDiv = MilitaryManager.getDivisionById(defenderInfo.id);
+      if (!defDiv) { MilitaryManager.setDivisionState(attackerDivId, 'idle'); return; }
+      defUnitsRaw = { ...defDiv.units };
+      defFaction  = defDiv.factionId;
+      MilitaryManager.setDivisionState(defenderInfo.id, 'fighting');
+    }
+
+    if (atkDiv.factionId === defFaction) {
+      MilitaryManager.setDivisionState(attackerDivId, 'idle');
+      if (defenderInfo.type === 'division') MilitaryManager.setDivisionState(defenderInfo.id, 'idle');
+      return;
+    }
+
+    const atkUnits = { ...atkDiv.units, total: _totalUnits(atkDiv.units) };
+    const defUnits = { ...defUnitsRaw,  total: _totalUnits(defUnitsRaw)  };
+    const isSiege  = defenderInfo.type === 'garrison' &&
+                     prov.buildings.some(b => b === '요새' || b === '성벽');
+
+    const battle = {
+      id: _nextId++,
+      provinceId,
+      attackFaction: atkDiv.factionId,
+      defendFaction: defFaction,
+      attackerDivId,
+      defenderInfo,
+      attackUnits:  atkUnits,
+      defendUnits:  defUnits,
+      attackPower:  0,
+      defendPower:  0,
+      day:          1,
+      type:         isSiege ? 'siege' : 'battle',
+      siegePct:     0,
+      log:          [],
+      status:       'ongoing',
+    };
+    battle.log.push(`1일차: ${battle.attackFaction} ${prov.name} 공격 개시, ${battle.defendFaction} 방어선 구축`);
+    _battles.push(battle);
+    _refreshStatusBar();
+    return battle.id;
+  }
+
+  // ── 테스트용 전투 직접 생성 ──
+  function createTestBattle({ provinceId, attackFaction, defendFaction, type, day, siegePct, atkUnits, defUnits }) {
+    const atkU   = { ...atkUnits,  total: _totalUnits(atkUnits)  };
+    const defU   = { ...defUnits,  total: _totalUnits(defUnits)  };
+    const prov   = ProvinceManager.getById(provinceId);
+    const name   = prov ? prov.name : `P${provinceId}`;
+    const log    = [];
+    const d      = day || 1;
+    log.push(`1일차: ${attackFaction} ${name} 공격 개시, ${defendFaction} 방어선 구축`);
+    for (let i = 2; i <= d; i++) log.push(`${i}일차: 치열한 교전 계속`);
+
+    const b = {
+      id: _nextId++,
+      provinceId,
+      attackFaction,
+      defendFaction,
+      attackerDivId: null,
+      defenderInfo:  null,
+      attackUnits:   atkU,
+      defendUnits:   defU,
+      attackPower:   0,
+      defendPower:   0,
+      day:           d,
+      type:          type || 'battle',
+      siegePct:      siegePct || 0,
+      log,
+      status: 'ongoing',
+    };
+    _battles.push(b);
+    _refreshStatusBar();
+    return b.id;
+  }
+
+  // ── 매틱 호출 ──
+  function onTick() {
+    _battles.forEach(b => { if (b.status === 'ongoing') _advanceBattle(b); });
+    _battles = _battles.filter(b => b.status === 'ongoing');
+    _refreshStatusBar();
+  }
+
+  // ── 전투 1일 진행 ──
+  function _advanceBattle(b) {
+    b.day++;
+    const atkPow = CombatEngine.calcCombatPower(b.attackUnits, b.attackFaction, b.provinceId, false);
+    const defPow = CombatEngine.calcCombatPower(b.defendUnits, b.defendFaction, b.provinceId, true);
+    b.attackPower = atkPow;
+    b.defendPower = defPow;
+    const variance = COMBAT_VARIANCE_MIN + Math.random() * COMBAT_VARIANCE_RANGE;
+
+    if (b.type === 'siege') {
+      b.siegePct = Math.min(100, b.siegePct + (atkPow / (defPow + SIEGE_DEFENSE_BUFFER)) * SIEGE_PROGRESS_MULT);
+      if (b.day % SIEGE_LOG_INTERVAL === 0) {
+        const msg = b.siegePct < 30
+          ? `${b.day}일차: 공성 초기 단계, 방어군 저항`
+          : b.siegePct < 70
+            ? `${b.day}일차: 성벽 파괴 진행 중...`
+            : `${b.day}일차: 함락 임박! 수비군 최후 저항`;
+        b.log.push(msg);
+      }
+      if (b.siegePct >= 100) {
+        b.log.push(`${b.day}일차: ${b.attackFaction} 공성 성공!`);
+        _resolveAttackerWin(b);
+      }
+    } else {
+      const attLoss = Math.round(defPow * ATTACKER_LOSS_RATE  * variance);
+      const defLoss = Math.round(atkPow * DEFENDER_LOSS_RATE  * variance);
+      b.attackUnits = _applyLoss(b.attackUnits, attLoss);
+      b.defendUnits = _applyLoss(b.defendUnits, defLoss);
+
+      if (b.day % BATTLE_LOG_INTERVAL === 0) {
+        let logMsg;
+        if      (b.attackUnits.total <= MIN_UNITS)          logMsg = `${b.day}일차: ${b.attackFaction} 전열 붕괴`;
+        else if (b.defendUnits.total <= MIN_UNITS)          logMsg = `${b.day}일차: ${b.defendFaction} 전열 붕괴`;
+        else if (atkPow > defPow * POWER_ADVANTAGE_THRESH)  logMsg = `${b.day}일차: ${b.attackFaction} 전선 압박`;
+        else if (defPow > atkPow * POWER_ADVANTAGE_THRESH)  logMsg = `${b.day}일차: ${b.defendFaction} 수비 성공`;
+        else                                                logMsg = `${b.day}일차: 치열한 교전 계속`;
+        b.log.push(logMsg);
+      }
+
+      if      (b.defendUnits.total <= MIN_UNITS) _resolveAttackerWin(b);
+      else if (b.attackUnits.total <= MIN_UNITS) _resolveDefenderWin(b);
+    }
+  }
+
+  // ── 공격 측 승리 ──
+  function _resolveAttackerWin(b) {
+    b.status = 'resolved';
+    const prov = ProvinceManager.getById(b.provinceId);
+    const name = prov ? prov.name : String(b.provinceId);
+    Notifications.push(`⚔ ${name}: ${b.attackFaction} 승리 vs ${b.defendFaction}`, 'good');
+
+    if (b.attackerDivId) {
+      MilitaryManager.updateDivision(b.attackerDivId, b.attackUnits);
+      MilitaryManager.setDivisionState(b.attackerDivId, 'idle');
+    }
+    if (b.defenderInfo) {
+      if (b.defenderInfo.type === 'garrison') {
+        const g = MilitaryManager.getGarrison(b.provinceId);
+        if (g) {
+          MilitaryManager.updateGarrisonCasualties(b.provinceId, {
+            infantry: Math.max(0, g.infantry - (b.defendUnits.infantry || 0)),
+            cavalry:  Math.max(0, g.cavalry  - (b.defendUnits.cavalry  || 0)),
+            archers:  Math.max(0, g.archers  - (b.defendUnits.archers  || 0)),
+            siege:    Math.max(0, g.siege    - (b.defendUnits.siege    || 0)),
+          });
+        }
+      } else {
+        const defDiv = MilitaryManager.getDivisionById(b.defenderInfo.id);
+        if (defDiv) {
+          MilitaryManager.updateDivision(b.defenderInfo.id, b.defendUnits);
+          MilitaryManager.retreatDivision(b.defenderInfo.id, b.provinceId);
+        }
+      }
+      CombatEngine.occupyProvince(b.provinceId, b.attackFaction);
+    }
+    MapRenderer.markDirty();
+  }
+
+  // ── 방어 측 승리 ──
+  function _resolveDefenderWin(b) {
+    b.status = 'resolved';
+    const prov = ProvinceManager.getById(b.provinceId);
+    const name = prov ? prov.name : String(b.provinceId);
+    Notifications.push(`🛡 ${name}: ${b.defendFaction} 수비 성공 vs ${b.attackFaction}`, 'warn');
+
+    if (b.attackerDivId) {
+      MilitaryManager.updateDivision(b.attackerDivId, b.attackUnits);
+      MilitaryManager.retreatDivision(b.attackerDivId, b.provinceId);
+    }
+    if (b.defenderInfo && b.defenderInfo.type === 'division') {
+      const defDiv = MilitaryManager.getDivisionById(b.defenderInfo.id);
+      if (defDiv) {
+        MilitaryManager.updateDivision(b.defenderInfo.id, b.defendUnits);
+        MilitaryManager.setDivisionState(b.defenderInfo.id, 'idle');
+      }
+    }
+    MapRenderer.markDirty();
+  }
+
+  // ── 조회 ──
+  function getAll()                    { return _battles.filter(b => b.status === 'ongoing'); }
+  function getById(id)                 { return _battles.find(b => b.id === id); }
+  function getBattlesAt(provinceId)    { return _battles.filter(b => b.provinceId === provinceId && b.status === 'ongoing'); }
+
+  function _refreshStatusBar() {
+    const el    = document.getElementById('status-battles');
+    const count = getAll().length;
+    if (el) {
+      el.textContent = `⚔ 전투: ${count}건`;
+      el.style.color = count > 0 ? '#e94560' : '';
+    }
+  }
+
+  return { startBattle, createTestBattle, onTick, getAll, getById, getBattlesAt };
+})();
+
+
+/* ════════════════════════════════════════════════════════
+   BATTLE OVERLAY — 맵 위 전투 카드 DOM 오버레이 (Phase 4)
+════════════════════════════════════════════════════════ */
+const BattleOverlay = (() => {
+  "use strict";
+
+  let _cards = {}; // battleId → HTMLElement
+
+  // ── 전투 목록 기반으로 카드 생성/업데이트/삭제 ──
+  function update() {
+    const battles = BattleManager.getAll();
+    const wrap    = document.getElementById('canvas-wrap');
+    if (!wrap) return;
+
+    // 해소된 전투 카드 제거
+    const activeIds = new Set(battles.map(b => b.id));
+    Object.keys(_cards).forEach(id => {
+      if (!activeIds.has(parseInt(id))) {
+        _cards[id].remove();
+        delete _cards[id];
+      }
+    });
+
+    // 생성 / 콘텐츠 업데이트
+    battles.forEach(b => {
+      if (!_cards[b.id]) {
+        const card = document.createElement('div');
+        card.className = 'battle-card' + (b.type === 'siege' ? ' siege' : '');
+        card.addEventListener('click', e => {
+          e.stopPropagation();
+          UI.showBattleDetail(b.id);
+        });
+        wrap.appendChild(card);
+        _cards[b.id] = card;
+      }
+      _updateCardContent(_cards[b.id], b);
+      _positionCard(_cards[b.id], b);
+    });
+  }
+
+  // ── 위치만 업데이트 (렌더 루프에서 호출) ──
+  function reposition() {
+    BattleManager.getAll().forEach(b => {
+      if (_cards[b.id]) _positionCard(_cards[b.id], b);
+    });
+  }
+
+  function _positionCard(card, battle) {
+    const prov = ProvinceManager.getById(battle.provinceId);
+    if (!prov) return;
+    const [cx, cy] = MapRenderer.polyCenter(prov.poly);
+    card.style.left = Math.round(cx - 110) + 'px';
+    card.style.top  = Math.round(cy + 8)   + 'px';
+  }
+
+  function _updateCardContent(card, b) {
+    const prov     = ProvinceManager.getById(b.provinceId);
+    const provName = prov ? prov.name : `P${b.provinceId}`;
+    const atkF     = ProvinceManager.getFaction(b.attackFaction);
+    const defF     = ProvinceManager.getFaction(b.defendFaction);
+    const atkColor = atkF ? atkF.color : '#e94560';
+    const defColor = defF ? defF.color : '#5a8ad0';
+
+    if (b.type === 'siege') {
+      const pct = Math.min(100, Math.round(b.siegePct));
+      card.innerHTML = `
+        <div class="battle-card-title">🏰 ${provName} 공성전<span class="battle-day">[${b.day}일째]</span></div>
+        <div class="siege-bar-bg"><div class="siege-bar-fill" style="width:${pct}%"></div></div>
+        <div class="battle-forces">
+          <span class="att" style="color:${atkColor}">${b.attackFaction}</span>
+          <span style="color:#f5a623;font-weight:bold">${pct}%</span>
+          <span class="def" style="color:${defColor}">${b.defendFaction}</span>
+        </div>
+        <div class="battle-card-footer">
+          <span>공격 ${b.attackUnits.total.toLocaleString()}</span>
+          <span>수비 ${b.defendUnits.total.toLocaleString()}</span>
+        </div>`;
+    } else {
+      const total  = (b.attackPower || 1) + (b.defendPower || 1);
+      const atkPct = Math.round((b.attackPower || 0) / total * 100) || 50;
+      const defPct = 100 - atkPct;
+      card.innerHTML = `
+        <div class="battle-card-title">⚔ ${provName} 전투<span class="battle-day">[${b.day}일째]</span></div>
+        <div class="battle-vs-row">
+          <div class="battle-bar attacker" style="flex:${atkPct}"></div>
+          <div class="battle-vs-center">VS</div>
+          <div class="battle-bar defender" style="flex:${defPct}"></div>
+        </div>
+        <div class="battle-forces">
+          <span class="att" style="color:${atkColor}">${b.attackFaction}</span>
+          <span class="def" style="color:${defColor}">${b.defendFaction}</span>
+        </div>
+        <div class="battle-forces">
+          <span style="color:#bbb">${b.attackUnits.total.toLocaleString()}명</span>
+          <span style="color:#bbb">${b.defendUnits.total.toLocaleString()}명</span>
+        </div>
+        <div class="battle-card-footer">
+          <span>⚔ ${b.attackPower ? Math.round(b.attackPower).toLocaleString() : '?'}</span>
+          <span>${b.defendPower ? Math.round(b.defendPower).toLocaleString() : '?'} ⚔</span>
+        </div>`;
+    }
+  }
+
+  return { update, reposition };
+})();
+
+
+
 const Notifications = (() => {
   let feed = null;
 
@@ -2644,11 +3299,37 @@ window.addEventListener('load', () => {
   // M06: 매틱 사단 이동, 매월 유지비
   GameCore.on('tick',     () => MilitaryManager.onTick());
   GameCore.on('newMonth', () => MilitaryManager.onMonthUpkeep());
-  // M07: 전투 해결
-  GameCore.on('battleStart', data => CombatEngine.resolveBattle(data));
+  // M07+: 전투 시작 → BattleManager로 라우팅 (다중 일수 전투)
+  GameCore.on('battleStart', data => BattleManager.startBattle(data));
+  // BattleManager 매틱 진행 + BattleOverlay 갱신
+  GameCore.on('tick', () => { BattleManager.onTick(); BattleOverlay.update(); });
 
   // 초기 경제 계산
   FactionManager.onMonthTick();
+
+  // 테스트용 초기 전투 생성 (Phase 4 데모)
+  // 1. 한성 전투: 고려(공격) vs 북방부족(방어) — 2일째 진행 중
+  BattleManager.createTestBattle({
+    provinceId:    6,
+    attackFaction: '고려',
+    defendFaction: '북방부족',
+    type:          'battle',
+    day:           2,
+    atkUnits:      { infantry:8000, cavalry:2000, archers:2000, siege:0 },
+    defUnits:      { infantry:6000, cavalry:2000, archers:500,  siege:0 },
+  });
+  // 2. 서경 공성전: 북방부족(공격) vs 서방상인(방어) — 공성 45% 진행
+  BattleManager.createTestBattle({
+    provinceId:    5,
+    attackFaction: '북방부족',
+    defendFaction: '서방상인',
+    type:          'siege',
+    day:           5,
+    siegePct:      45,
+    atkUnits:      { infantry:8000, cavalry:2000, archers:2000, siege:0 },
+    defUnits:      { infantry:3000, cavalry:1000, archers:1000, siege:0 },
+  });
+  BattleOverlay.update();
 
   // ▶ 원클릭 시작 버튼
   document.getElementById('oneclick-start-btn').addEventListener('click', function () {
