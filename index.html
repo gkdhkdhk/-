@@ -903,6 +903,154 @@
   font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 5px;
 }
 #saveload-btn:hover { background: #1a4a80; }
+
+  /* ── 연구 포커스 위젯 ── */
+  #tech-focus-widget {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #0f2a50;
+    border: 1px solid #1a4a8a;
+    border-radius: 4px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #c0d8f0;
+    min-width: 160px;
+    max-width: 220px;
+    transition: all 0.15s;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  #tech-focus-widget:hover { background: #1a3a6a; border-color: #3a7aca; }
+  #tech-focus-widget .tfw-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+  #tech-focus-widget .tfw-bar-wrap {
+    width: 50px;
+    height: 6px;
+    background: #0a1020;
+    border-radius: 3px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  #tech-focus-widget .tfw-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #1a7acc, #5abaff);
+    border-radius: 3px;
+    transition: width 0.3s;
+  }
+  #tech-focus-widget .tfw-months { font-size: 10px; color: #6090c0; flex-shrink: 0; }
+
+  /* ── 군사 모드 ── */
+  #military-mode-btn.active { background: #7b1a00; border-color: #f5a623; color: #f5a623; }
+  .military-panel-div-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    border-radius: 4px;
+    margin-bottom: 4px;
+    background: #0f2040;
+    border: 1px solid #1a3a60;
+    cursor: pointer;
+    font-size: 11px;
+    transition: background 0.1s;
+  }
+  .military-panel-div-item:hover { background: #1a3a60; }
+  .military-panel-div-item.selected { background: #2a2000; border-color: #f5a623; }
+  .mil-div-icon { font-size: 14px; flex-shrink: 0; }
+  .mil-div-info { flex: 1; }
+  .mil-div-name { font-weight: bold; color: #e0e8f0; }
+  .mil-div-stats { color: #6090a0; font-size: 10px; margin-top: 1px; }
+  .mil-div-location { color: #8090a0; font-size: 10px; }
+  .mil-btn {
+    width: 100%;
+    margin-top: 6px;
+    padding: 6px;
+    border-radius: 4px;
+    border: 1px solid #1a4a6a;
+    background: #0f2a40;
+    color: #c0d8f0;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+    transition: all 0.15s;
+    text-align: center;
+  }
+  .mil-btn:hover { background: #1a3a60; }
+  .mil-btn.danger { border-color: #6a1a1a; background: #2a0f0f; color: #e09090; }
+  .mil-btn.danger:hover { background: #3a1a1a; }
+  .mil-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── 기술 카드 ── */
+  .tech-tab-row {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .tech-tab {
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid #1a3a5a;
+    background: #0a1a30;
+    color: #6090a0;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .tech-tab.active { background: #1a4a7a; color: #fff; border-color: #3a7aca; }
+  .tech-tab:hover:not(.active) { color: #c0d0e0; border-color: #3a6a9a; }
+  .tech-card {
+    border-radius: 5px;
+    border: 1px solid #1a3a5a;
+    background: #0f1a30;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    transition: all 0.15s;
+  }
+  .tech-card.done { border-color: #2a7a4a; background: #0a1f18; }
+  .tech-card.active-research { border-color: #1a6acc; background: #0a1a30; }
+  .tech-card.locked { opacity: 0.45; }
+  .tech-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 4px;
+  }
+  .tech-card-name { font-weight: bold; font-size: 12px; color: #e0e8f0; }
+  .tech-card-status { font-size: 11px; }
+  .tech-card-desc { font-size: 10px; color: #5a7a9a; margin-bottom: 5px; }
+  .tech-card-effect { font-size: 10px; color: #7ab8d0; }
+  .tech-card-progress {
+    height: 5px;
+    background: #0a1020;
+    border-radius: 3px;
+    overflow: hidden;
+    margin: 4px 0;
+  }
+  .tech-card-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #1a7acc, #5abaff);
+    border-radius: 3px;
+    transition: width 0.3s;
+  }
+  .tech-start-btn {
+    width: 100%;
+    margin-top: 5px;
+    padding: 4px 8px;
+    border-radius: 3px;
+    border: 1px solid #1a5590;
+    background: #0f2a50;
+    color: #80c8f0;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .tech-start-btn:hover { background: #1a3a70; color: #fff; }
+  .tech-start-btn.switch { border-color: #5a8a1a; background: #1a2a0f; color: #9acc60; }
+  .tech-start-btn.switch:hover { background: #2a3a1a; }
 </style>
 </head>
 <body>
@@ -939,7 +1087,11 @@
       <span aria-label="철"><span aria-hidden="true">⚙</span> <span id="res-iron">0</span></span>
       <span aria-label="목재"><span aria-hidden="true">🪵</span> <span id="res-wood">0</span></span>
       <span id="trade-income-display" style="font-size:11px;color:#f5a623;margin-left:8px;cursor:pointer" onclick="ActionPanels.openTrade()" title="교역로 관리">🛤 +0/월</span>
-      <button class="ctrl-btn" onclick="ActionPanels.openTech()" title="기술 연구" style="font-size:13px;padding:4px 8px">🔬</button>
+      <div id="tech-focus-widget" onclick="ActionPanels.openTech()" title="기술 연구 클릭으로 열기">
+        <span>🔬</span>
+        <span class="tfw-name" id="tfw-name">연구 선택...</span>
+      </div>
+      <button id="military-mode-btn" class="ctrl-btn" onclick="MilitaryUI.toggleMode()" title="군사 모드 ON/OFF" style="font-size:12px;padding:4px 8px">⚔ 군사</button>
       <button id="ai-toggle-btn" class="ctrl-btn" title="AI 자동 행동 ON/OFF"
         onclick="const on=AIManager.toggle();this.textContent='🤖 AI '+(on?'ON':'OFF');this.style.opacity=on?'1':'0.5';"
         style="font-size:12px;padding:4px 8px">🤖 AI ON</button>
@@ -996,6 +1148,7 @@
           <div id="faction-list"></div>
         </div>
       </div>
+      <div id="military-panel" style="display:none"></div>
       <div id="empty-hint">
         <span class="hint-icon">🏰</span>
         맵의 프로빈스를 클릭하면<br>상세 정보가 표시됩니다.<br><br>
@@ -1648,22 +1801,57 @@ const MapRenderer = (() => {
       // 세력별 중심 프로빈스에 세력명 표시
     }
 
-    // 5.5단계: 사단 배지
+    // 5.5단계: 사단 배지 + 군사 모드 하이라이트
     if (typeof MilitaryManager !== 'undefined') {
+      const selDivId = typeof MilitaryUI !== 'undefined' ? MilitaryUI.getSelectedDivId() : null;
+      const selDiv = selDivId ? MilitaryManager.getDivisionById(selDivId) : null;
+      const selProvId = selDiv ? selDiv.locationId : null;
+
+      // 선택된 사단의 프로빈스 노란 테두리
+      if (selProvId) {
+        const selProv = ProvinceManager.getById(selProvId);
+        if (selProv) {
+          ctx.save();
+          ctx.setLineDash([4, 3]);
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = '#f5a623';
+          drawPoly(ctx, selProv.poly, null, '#f5a623', 3);
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+        // 인접 가능 지역 힌트 (연두색 테두리)
+        if (typeof MilitaryUI !== 'undefined' && MilitaryUI.isActive()) {
+          const adj = MilitaryManager.getAdjacency();
+          (adj[selProvId] || []).forEach(adjId => {
+            const adjProv = ProvinceManager.getById(adjId);
+            if (adjProv) {
+              ctx.save();
+              ctx.globalAlpha = 0.5;
+              ctx.setLineDash([3, 4]);
+              drawPoly(ctx, adjProv.poly, null, '#7acc50', 2);
+              ctx.setLineDash([]);
+              ctx.globalAlpha = 1;
+              ctx.restore();
+            }
+          });
+        }
+      }
+
       provinces.forEach(p => {
         const divsHere = MilitaryManager.getDivisionsAt(p.id);
         if (divsHere.length === 0) return;
         const [cx, cy] = polyCenter(p.poly);
         if (cx < 0 || cx > canvas.width || cy < 0 || cy > canvas.height) return;
         const hasMoving = divsHere.some(d => d.state === 'moving');
+        const playerDivs = divsHere.filter(d => d.factionId === '고려');
         const badgeY = cy + (scale > 0.8 ? 22 : 16) * scale;
         ctx.save();
-        ctx.fillStyle = 'rgba(20,10,10,0.8)';
-        ctx.fillRect(cx - 13, badgeY - 7, 26, 14);
+        ctx.fillStyle = 'rgba(20,10,10,0.85)';
+        ctx.fillRect(cx - 15, badgeY - 8, 30, 16);
         ctx.font = `bold ${Math.max(8, 9 * scale)}px 'Malgun Gothic', sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = hasMoving ? '#f5a623' : '#e94560';
+        ctx.fillStyle = hasMoving ? '#f5a623' : (playerDivs.length > 0 ? '#5abaff' : '#e94560');
         ctx.fillText(`\u2694${divsHere.length}`, cx, badgeY);
         ctx.restore();
       });
@@ -1780,14 +1968,24 @@ const MapRenderer = (() => {
   canvas.addEventListener('click', e => {
     const rect = canvas.getBoundingClientRect();
     const p = provinceAtPixel(e.clientX - rect.left, e.clientY - rect.top);
-    if (p) {
-      selectedId = p.id;
-      document.getElementById('status-selected').textContent = `선택: ${p.name}`;
-      UI.showProvince(p);
+    if (typeof MilitaryUI !== 'undefined' && MilitaryUI.isActive()) {
+      // 군사 모드: MilitaryUI가 클릭 처리
+      if (p) {
+        selectedId = p.id;
+        document.getElementById('status-selected').textContent = `선택: ${p.name}`;
+        MilitaryUI.handleProvinceClick(p);
+      }
     } else {
-      selectedId = null;
-      document.getElementById('status-selected').textContent = '선택: 없음';
-      UI.clearProvince();
+      // 일반 모드: 프로빈스 패널 표시
+      if (p) {
+        selectedId = p.id;
+        document.getElementById('status-selected').textContent = `선택: ${p.name}`;
+        UI.showProvince(p);
+      } else {
+        selectedId = null;
+        document.getElementById('status-selected').textContent = '선택: 없음';
+        UI.clearProvince();
+      }
     }
     needsRedraw = true;
   });
@@ -5086,7 +5284,9 @@ const ActionPanels = (() => {
     });
   }
 
-  // ── 기술 패널 ──
+  // 현재 선택된 기술 탭 (openTech 재열기 시 유지)
+  let _techTabActive = 'military';
+
   function openTech() {
     _open('🔬', '기술 연구', () => {
       const factionId = '고려';
@@ -5096,7 +5296,9 @@ const ActionPanels = (() => {
       const bonuses = TechManager.getBonuses(factionId);
       const doneCount  = TechManager.getTechCount(factionId);
       const totalCount = TechManager.getTotalTechCount();
+      const allTechTree = TechManager.getAllTechs();
 
+      // 현황 요약
       let html = `<div class="ap-section">
         <div class="ap-section-title">연구 현황</div>
         <div class="ap-row"><span class="ap-label">완료 기술</span><span class="ap-value positive">${doneCount} / ${totalCount}</span></div>
@@ -5104,55 +5306,98 @@ const ActionPanels = (() => {
         <div class="ap-row"><span class="ap-label">월 수입 보너스</span><span class="ap-value positive">+${bonuses.incomeBonus}💰/월</span></div>
       </div>`;
 
-      if (ip) {
-        const allTechs = Object.values(TechManager.getAllTechs()).flatMap(c => c.techs);
-        const ipTech = allTechs.find(t => t.id === ip.techId);
-        const pct = Math.round(ip.progress / ip.required * 100);
-        html += `<div class="ap-section">
-          <div class="ap-section-title">🔬 연구 진행 중</div>
-          <div class="ap-row">
-            <span class="ap-label">${ipTech ? ipTech.name : ip.techId}</span>
-            <span class="ap-value">${ip.progress}/${ip.required}개월</span>
-          </div>
-          <div style="background:#0a1020;border-radius:4px;height:8px;margin:4px 0 8px;overflow:hidden">
-            <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,#e94560,#f5a623)"></div>
-          </div>
-        </div>`;
+      // 카테고리 탭
+      html += `<div class="tech-tab-row">`;
+      for (const [catKey, cat] of Object.entries(allTechTree)) {
+        const active = catKey === _techTabActive ? ' active' : '';
+        html += `<button class="tech-tab${active}" onclick="ActionPanels._setTechTab('${catKey}')">${cat.label}</button>`;
       }
+      html += `</div>`;
 
-      for (const [, cat] of Object.entries(TechManager.getAllTechs())) {
-        html += `<div class="ap-section"><div class="ap-section-title">${cat.label}</div>`;
+      // 선택된 카테고리의 기술 카드
+      const cat = allTechTree[_techTabActive];
+      if (cat) {
         for (const tech of cat.techs) {
           const done       = TechManager.isResearched(factionId, tech.id);
-          const can        = TechManager.canResearch(factionId, tech.id);
           const prereqDone = !tech.prereq || TechManager.isResearched(factionId, tech.prereq);
-          const statusLabel = done
-            ? '<span style="color:#4caf50">✓ 완료</span>'
-            : ip
-              ? '<span style="color:#f5a623">연구 중</span>'
-              : !prereqDone
-                ? '<span style="color:#445">🔒 잠김</span>'
-                : gold < tech.cost
-                  ? `<span style="color:#e94560">💰${tech.cost} 부족</span>`
-                  : `<span style="color:#c0d8f0">💰${tech.cost}</span>`;
-          html += `<div class="ap-row" style="opacity:${done || can || prereqDone ? 1 : 0.5}">
-            <span class="ap-label">${tech.name}<br>
-              <small style="color:#556">${tech.desc}</small></span>
-            <span class="ap-value">${statusLabel}</span>
-          </div>`;
-          if (can) {
-            html += `<button class="ap-action-btn" onclick="TechManager.startResearch('${factionId}','${tech.id}');ActionPanels.openTech()">
-              🔬 연구 시작 <span class="btn-cost">💰${tech.cost}</span>
-            </button>`;
+          const isCurrentFocus = ip && ip.techId === tech.id;
+          const canAfford  = gold >= tech.cost;
+
+          // 카드 클래스 결정
+          let cardClass = 'tech-card';
+          if (done) cardClass += ' done';
+          else if (isCurrentFocus) cardClass += ' active-research';
+          else if (!prereqDone) cardClass += ' locked';
+
+          // 상태 표시
+          let statusHtml;
+          if (done) {
+            statusHtml = `<span class="tech-card-status" style="color:#4caf50">✓ 완료</span>`;
+          } else if (isCurrentFocus) {
+            const pct = Math.round(ip.progress / ip.required * 100);
+            statusHtml = `<span class="tech-card-status" style="color:#5abaff">🔬 ${ip.progress}/${ip.required}개월</span>`;
+          } else if (!prereqDone) {
+            const prereqTech = Object.values(allTechTree).flatMap(c => c.techs).find(t => t.id === tech.prereq);
+            statusHtml = `<span class="tech-card-status" style="color:#445">🔒 ${prereqTech ? prereqTech.name : ''} 필요</span>`;
+          } else if (!canAfford) {
+            statusHtml = `<span class="tech-card-status" style="color:#e94560">💰${tech.cost} 필요</span>`;
+          } else {
+            statusHtml = `<span class="tech-card-status" style="color:#c0d8f0">💰${tech.cost}</span>`;
           }
+
+          // 효과 요약
+          const effectParts = [];
+          if (tech.effect.military)    effectParts.push(`+${tech.effect.military} 전투력`);
+          if (tech.effect.incomeBonus) effectParts.push(`+${tech.effect.incomeBonus}💰/월`);
+          if (tech.effect.stability)   effectParts.push(`+${tech.effect.stability} 안정도`);
+          if (tech.effect.prestige)    effectParts.push(`+${tech.effect.prestige} 위신`);
+          if (tech.effect.goldBonus)   effectParts.push(`+${tech.effect.goldBonus}💰 즉시`);
+          if (tech.effect.siegeBonus)  effectParts.push(`공성 강화`);
+          if (tech.effect.tradeBonus)  effectParts.push(`교역 보너스`);
+          if (tech.effect.provinceDevBonus) effectParts.push(`프로빈스 발전도 보너스`);
+
+          html += `<div class="${cardClass}">
+            <div class="tech-card-header">
+              <span class="tech-card-name">${tech.name}</span>
+              ${statusHtml}
+            </div>
+            <div class="tech-card-desc">${tech.desc}</div>
+            ${effectParts.length ? `<div class="tech-card-effect">${effectParts.join(' · ')}</div>` : ''}`;
+
+          // 진행바 (현재 포커스 기술)
+          if (isCurrentFocus) {
+            const pct = Math.round(ip.progress / ip.required * 100);
+            html += `<div class="tech-card-progress"><div class="tech-card-progress-fill" style="width:${pct}%"></div></div>`;
+          }
+
+          // 버튼
+          if (!done && prereqDone && canAfford) {
+            if (isCurrentFocus) {
+              html += `<div style="font-size:10px;color:#5abaff;text-align:center;padding-top:4px">현재 연구 중</div>`;
+            } else if (ip) {
+              html += `<button class="tech-start-btn switch" onclick="TechManager.startResearch('${factionId}','${tech.id}');ActionPanels.openTech()">
+                🔄 연구 전환 <span style="color:#8a9a70">💰${tech.cost}</span>
+              </button>`;
+            } else {
+              html += `<button class="tech-start-btn" onclick="TechManager.startResearch('${factionId}','${tech.id}');ActionPanels.openTech()">
+                🔬 연구 시작 <span style="color:#7090a0">💰${tech.cost}</span>
+              </button>`;
+            }
+          }
+
+          html += `</div>`;
         }
-        html += '</div>';
       }
       return html;
     });
   }
 
-  return { openEconomy, openCharacters, openStability, openDiplomacy, openEvents, openProvinceList, openTrade, openTech, close, refresh, _stabilityBoost, _sendGift, _assignHeir, _openMarriage };
+  function _setTechTab(catKey) {
+    _techTabActive = catKey;
+    openTech();
+  }
+
+  return { openEconomy, openCharacters, openStability, openDiplomacy, openEvents, openProvinceList, openTrade, openTech, _setTechTab, close, refresh, _stabilityBoost, _sendGift, _assignHeir, _openMarriage };
 })();
 
 /* ════════════════════════════════════════════════════════
@@ -5879,7 +6124,6 @@ const TechManager = (() => {
     const tech = _findTech(techId);
     if (!tech) return false;
     if (isResearched(factionId, techId)) return false;
-    if (_inProgress[factionId]) return false;
     if (tech.prereq && !isResearched(factionId, tech.prereq)) return false;
     const allStates = FactionManager.getAllFactionStates();
     const s = allStates[factionId];
@@ -5894,16 +6138,22 @@ const TechManager = (() => {
     return null;
   }
 
-  /** 연구 시작 (즉시 비용 지불, 3개월 후 완료) */
+  /** 연구 시작/전환 (즉시 비용 지불, 3개월 후 완료) */
   function startResearch(factionId, techId) {
     if (!canResearch(factionId, techId)) {
       Notifications.push(`연구 불가: ${techId}`, 'warn');
       return false;
     }
     const tech = _findTech(techId);
+    const switching = !!_inProgress[factionId];
+    if (switching) {
+      const oldTech = _findTech(_inProgress[factionId].techId);
+      Notifications.push(`🔬 연구 전환: ${oldTech ? oldTech.name : ''} → ${tech.name}`, 'warn');
+    }
     FactionManager.addGold(factionId, -tech.cost);
     _inProgress[factionId] = { techId, progress: 0, required: 3 };
-    Notifications.push(`🔬 ${factionId}: ${tech.name} 연구 시작 (3개월 소요)`, 'good');
+    if (!switching) Notifications.push(`🔬 ${factionId}: ${tech.name} 연구 시작 (3개월 소요)`, 'good');
+    _updateTechFocusWidget();
     ActionPanels.refresh();
     AlertSystem.refresh();
     return true;
@@ -5932,6 +6182,7 @@ const TechManager = (() => {
     }
 
     Notifications.push(`✅ ${factionId}: ${tech.name} 연구 완료!`, 'good');
+    _updateTechFocusWidget();
     AlertSystem.refresh();
   }
 
@@ -5949,6 +6200,7 @@ const TechManager = (() => {
         FactionManager.addGold(factionId, bonus.incomeBonus);
       }
     }
+    _updateTechFocusWidget();
   }
 
   function getInProgress(factionId)  { return _inProgress[factionId] || null; }
@@ -5956,6 +6208,39 @@ const TechManager = (() => {
   function getBonuses(factionId)     { _ensureFaction(factionId); return { ..._bonuses[factionId] }; }
   function getTechCount(factionId)   { _ensureFaction(factionId); return _researched[factionId].size; }
   function getTotalTechCount()       { return Object.values(TECH_TREE).reduce((s, c) => s + c.techs.length, 0); }
+
+  /** 상단 바 연구 포커스 위젯 갱신 */
+  function _updateTechFocusWidget() {
+    const nameEl = document.getElementById('tfw-name');
+    if (!nameEl) return;
+    const widget = document.getElementById('tech-focus-widget');
+    const ip = _inProgress['고려'];
+    // Remove old bar wrap if present
+    const oldBar = widget ? widget.querySelector('.tfw-bar-wrap') : null;
+    const oldMonths = widget ? widget.querySelector('.tfw-months') : null;
+    if (oldBar) oldBar.remove();
+    if (oldMonths) oldMonths.remove();
+    if (ip) {
+      const tech = _findTech(ip.techId);
+      const pct = Math.round(ip.progress / ip.required * 100);
+      nameEl.textContent = tech ? tech.name : ip.techId;
+      if (widget) {
+        const barWrap = document.createElement('div');
+        barWrap.className = 'tfw-bar-wrap';
+        const barFill = document.createElement('div');
+        barFill.className = 'tfw-bar-fill';
+        barFill.style.width = pct + '%';
+        barWrap.appendChild(barFill);
+        const monthsEl = document.createElement('span');
+        monthsEl.className = 'tfw-months';
+        monthsEl.textContent = `${ip.progress}/${ip.required}개월`;
+        widget.appendChild(barWrap);
+        widget.appendChild(monthsEl);
+      }
+    } else {
+      nameEl.textContent = '연구 선택...';
+    }
+  }
 
   function init() {
     _ensureFaction('고려');
@@ -5995,6 +6280,7 @@ const TechManager = (() => {
     init, getAllTechs, isResearched, canResearch, startResearch,
     onMonthTick, getInProgress, getResearched, getBonuses,
     getTechCount, getTotalTechCount,
+    updateFocusWidget: _updateTechFocusWidget,
     saveState, loadState,
   };
 })();
@@ -6466,10 +6752,269 @@ const SaveLoadManager = (() => {
   return { init, save, load, getMeta, openModal, closeModal };
 })();
 
+/* ════════════════════════════════════════════════════════
+   MilitaryUI — HOI4 스타일 사단 직접 운용 UI
+════════════════════════════════════════════════════════ */
+const MilitaryUI = (() => {
+  'use strict';
+
+  const PLAYER_FACTION = '고려';
+  let _militaryMode = false;
+  let _selectedDivId = null;
+
+  // ── 군사 모드 토글 ──
+  function toggleMode() {
+    _militaryMode = !_militaryMode;
+    _selectedDivId = null;
+    const btn = document.getElementById('military-mode-btn');
+    if (btn) {
+      btn.classList.toggle('active', _militaryMode);
+      btn.textContent = _militaryMode ? '⚔ 군사 ON' : '⚔ 군사';
+    }
+    if (_militaryMode) {
+      Notifications.push('⚔ 군사 모드 활성화 — 사단 선택 후 이동할 지역 클릭', '');
+      _showMilitaryPanel();
+    } else {
+      _hideMilitaryPanel();
+      MapRenderer.markDirty();
+    }
+  }
+
+  function isActive() { return _militaryMode; }
+  function getSelectedDivId() { return _selectedDivId; }
+
+  // ── 캔버스 클릭 처리 (MapRenderer에서 호출) ──
+  function handleProvinceClick(province) {
+    if (!_militaryMode) return false; // 일반 모드에서는 처리 안 함
+
+    if (!_selectedDivId) {
+      // 1단계: 이 프로빈스에 있는 고려 사단 목록 보여주기
+      const divsHere = MilitaryManager.getDivisionsAt(province.id)
+        .filter(d => d.factionId === PLAYER_FACTION);
+      if (divsHere.length > 0) {
+        _showMilitaryPanel(province.id);
+      } else {
+        Notifications.push(`⚔ ${province.name}에 배치된 사단이 없습니다`, '');
+        _showMilitaryPanel(province.id);
+      }
+    } else {
+      // 2단계: 이동 명령
+      const div = MilitaryManager.getDivisionById(_selectedDivId);
+      if (!div) { _selectedDivId = null; MapRenderer.markDirty(); return true; }
+
+      if (div.locationId === province.id) {
+        // 같은 프로빈스 클릭 → 선택 해제
+        _selectedDivId = null;
+        _showMilitaryPanel(province.id);
+        MapRenderer.markDirty();
+        return true;
+      }
+
+      const adj = MilitaryManager.getAdjacency();
+      const isAdj = (adj[div.locationId] || []).includes(province.id);
+      if (!isAdj) {
+        Notifications.push(`⚠ 인접하지 않은 지역입니다`, 'warn');
+        return true;
+      }
+
+      // 이동 명령 실행
+      const ok = MilitaryManager.moveDivision(_selectedDivId, province.id);
+      if (ok) {
+        const prov = ProvinceManager.getById(province.id);
+        const isEnemy = prov && prov.faction !== PLAYER_FACTION && prov.faction !== '미지';
+        Notifications.push(
+          isEnemy
+            ? `⚔ ${div.id}사단 → ${province.name} 공격 이동`
+            : `🏃 ${div.id}사단 → ${province.name} 이동 명령`,
+          isEnemy ? 'warn' : ''
+        );
+        _selectedDivId = null;
+        _showMilitaryPanel();
+        MapRenderer.markDirty();
+      }
+    }
+    return true; // 군사 모드에서 클릭 이벤트 소비
+  }
+
+  // ── 사단 선택 ──
+  function selectDivision(divId) {
+    _selectedDivId = divId;
+    const div = MilitaryManager.getDivisionById(divId);
+    if (div) {
+      const prov = ProvinceManager.getById(div.locationId);
+      Notifications.push(`✔ ${divId}사단 선택됨${prov ? ' — ' + prov.name + ' 주둔' : ''} | 이동할 지역 클릭`, '');
+    }
+    _showMilitaryPanel();
+    MapRenderer.markDirty();
+  }
+
+  // ── 징병 ──
+  function recruitDivision(provinceId) {
+    const st = FactionManager.getFactionState(PLAYER_FACTION);
+    if (!st || st.gold < 200) {
+      Notifications.push('💰 금화 부족 (200 필요)', 'warn');
+      return;
+    }
+    FactionManager.addGold(PLAYER_FACTION, -200);
+    const base = MilitaryManager.getUnitTypes();
+    const newId = MilitaryManager.createDivision(PLAYER_FACTION, provinceId, {
+      infantry: 2000, cavalry: 500, archers: 500, siege: 0,
+    });
+    const prov = ProvinceManager.getById(provinceId);
+    Notifications.push(`🪖 ${newId}사단 징병 완료 — ${prov ? prov.name : ''} 배치`, 'good');
+    _showMilitaryPanel(provinceId);
+    MapRenderer.markDirty();
+  }
+
+  // ── 해산 ──
+  function disbandSelected() {
+    if (!_selectedDivId) return;
+    const divId = _selectedDivId;
+    MilitaryManager.disbandDivision(divId);
+    Notifications.push(`🗑 ${divId}사단 해산`, 'warn');
+    _selectedDivId = null;
+    _showMilitaryPanel();
+    MapRenderer.markDirty();
+  }
+
+  // ── 사이드바 군사 패널 업데이트 ──
+  function _showMilitaryPanel(focusProvinceId) {
+    const panel = document.getElementById('military-panel');
+    if (!panel) return;
+
+    // Hide other panels
+    const emptyHint = document.getElementById('empty-hint');
+    const provincePanel = document.getElementById('province-panel');
+    const factionPanel = document.getElementById('faction-panel');
+    const battlePanel = document.getElementById('battle-panel');
+    if (emptyHint) emptyHint.style.display = 'none';
+    if (provincePanel) provincePanel.style.display = 'none';
+    if (factionPanel) factionPanel.style.display = 'none';
+    if (battlePanel) battlePanel.style.display = 'none';
+    panel.style.display = 'block';
+
+    // Update sidebar header
+    const iconEl = document.getElementById('sidebar-title-icon');
+    const titleEl = document.getElementById('sidebar-title');
+    if (iconEl) iconEl.textContent = '⚔';
+    if (titleEl) titleEl.textContent = '군사 운용';
+
+    const divs = MilitaryManager.getDivisionsByFaction(PLAYER_FACTION);
+    const st = FactionManager.getFactionState(PLAYER_FACTION);
+    const gold = st ? Math.floor(st.gold || 0) : 0;
+
+    let html = `<div class="info-section">
+      <h4>고려 사단 현황</h4>`;
+
+    if (divs.length === 0) {
+      html += `<div style="color:#445;font-size:11px;padding:8px 0">배치된 사단 없음</div>`;
+    } else {
+      divs.forEach(div => {
+        const prov = ProvinceManager.getById(div.locationId);
+        const isSelected = div.id === _selectedDivId;
+        const total = (div.units.infantry||0) + (div.units.cavalry||0) + (div.units.archers||0) + (div.units.siege||0);
+        const stateLabel = { idle:'대기', moving:'이동', fighting:'전투' };
+        const stateColor = { idle:'#8090a0', moving:'#f5a623', fighting:'#e94560' };
+        html += `<div class="military-panel-div-item${isSelected ? ' selected' : ''}"
+            onclick="MilitaryUI.selectDivision(${div.id})">
+          <span class="mil-div-icon">🪖</span>
+          <div class="mil-div-info">
+            <div class="mil-div-name">${div.id}사단
+              <span style="font-size:9px;color:${stateColor[div.state]||'#666'};margin-left:4px">[${stateLabel[div.state]||div.state}]</span>
+            </div>
+            <div class="mil-div-stats">보병 ${div.units.infantry||0} | 기병 ${div.units.cavalry||0} | 궁수 ${div.units.archers||0}</div>
+            <div class="mil-div-location">📍 ${prov ? prov.name : '?'}</div>
+          </div>
+        </div>`;
+      });
+    }
+    html += '</div>';
+
+    // 징병 섹션
+    const selectedProv = focusProvinceId || (
+      _selectedDivId
+        ? (MilitaryManager.getDivisionById(_selectedDivId) || {}).locationId
+        : null
+    );
+    const playerProvs = ProvinceManager.getFactionProvinces(PLAYER_FACTION);
+
+    if (selectedProv) {
+      const spName = (ProvinceManager.getById(selectedProv) || {}).name || '?';
+      const isPlayerProv = playerProvs.some(p => p.id === selectedProv);
+      html += `<div class="info-section">
+        <h4>📍 ${spName}</h4>
+        ${isPlayerProv
+          ? `<button class="mil-btn" onclick="MilitaryUI.recruitDivision(${selectedProv})" ${gold<200?'disabled':''}>
+               🪖 징병 (💰200) ${gold<200 ? '<span style="color:#e94560">금화 부족</span>' : ''}
+             </button>`
+          : '<div style="color:#445;font-size:11px">적 영토 — 징병 불가</div>'}
+      </div>`;
+    } else {
+      // 기본 징병: 수도 기준
+      const capital = playerProvs.find(p => {
+        const fDef = ProvinceManager.getFactions()[PLAYER_FACTION];
+        return fDef && fDef.capital === p.id;
+      });
+      if (capital) {
+        html += `<div class="info-section">
+          <h4>징병</h4>
+          <button class="mil-btn" onclick="MilitaryUI.recruitDivision(${capital.id})" ${gold<200?'disabled':''}>
+            🪖 한성 징병 (💰200) ${gold<200 ? '<span style="color:#e94560">금화 부족</span>' : ''}
+          </button>
+        </div>`;
+      }
+    }
+
+    if (_selectedDivId) {
+      const selDiv = MilitaryManager.getDivisionById(_selectedDivId);
+      if (selDiv) {
+        html += `<div class="info-section">
+          <h4>선택된 사단: ${_selectedDivId}사단</h4>
+          <div style="font-size:11px;color:#8090a0;margin-bottom:6px">이동할 인접 지역을 클릭하세요</div>
+          <button class="mil-btn danger" onclick="MilitaryUI.disbandSelected()">🗑 해산</button>
+          <button class="mil-btn" onclick="MilitaryUI.cancelSelection()" style="margin-top:4px">✕ 선택 취소</button>
+        </div>`;
+      }
+    }
+
+    panel.innerHTML = html;
+  }
+
+  function _hideMilitaryPanel() {
+    const panel = document.getElementById('military-panel');
+    if (panel) panel.style.display = 'none';
+  }
+
+  function cancelSelection() {
+    _selectedDivId = null;
+    _showMilitaryPanel();
+    MapRenderer.markDirty();
+  }
+
+  // ── ESC 키 처리 ──
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && _militaryMode) {
+      if (_selectedDivId) {
+        cancelSelection();
+      } else {
+        toggleMode();
+      }
+    }
+  });
+
+  return {
+    toggleMode, isActive, getSelectedDivId,
+    handleProvinceClick, selectDivision,
+    recruitDivision, disbandSelected, cancelSelection,
+    refreshPanel: _showMilitaryPanel,
+  };
+})();
+
 window.addEventListener('load', () => {
   MapRenderer.init();
   Notifications.init();
   TechManager.init();
+  TechManager.updateFocusWidget();
   AIManager.init();
   SaveLoadManager.init();
   GameCore.start();
@@ -6492,8 +7037,8 @@ window.addEventListener('load', () => {
     updateResourceBar();
     const el = document.getElementById('trade-income-display');
     if (el) el.textContent = `🛤 +${TradeRouteManager.calcMonthlyIncome()}/월`;
+    if (typeof MilitaryUI !== 'undefined' && MilitaryUI.isActive()) MilitaryUI.refreshPanel();
   });
-  // M05: 매년 캐릭터 나이 진행
   GameCore.on('newYear',  s  => {
     CharacterManager.onYearTick();
     Notifications.push(`📅 ${s.year}년이 시작되었습니다`);
@@ -6519,29 +7064,7 @@ window.addEventListener('load', () => {
   MinimapRenderer.init();
   GameCore.on('tick', () => MinimapRenderer.update());
 
-  // 테스트용 초기 전투 생성 (Phase 4 데모)
-  // 1. 한성 전투: 고려(공격) vs 북방부족(방어) — 2일째 진행 중
-  BattleManager.createTestBattle({
-    provinceId:    6,
-    attackFaction: '고려',
-    defendFaction: '북방부족',
-    type:          'battle',
-    day:           2,
-    atkUnits:      { infantry:8000, cavalry:2000, archers:2000, siege:0 },
-    defUnits:      { infantry:6000, cavalry:2000, archers:500,  siege:0 },
-  });
-  // 2. 서경 공성전: 북방부족(공격) vs 서방상인(방어) — 공성 45% 진행
-  BattleManager.createTestBattle({
-    provinceId:    5,
-    attackFaction: '북방부족',
-    defendFaction: '서방상인',
-    type:          'siege',
-    day:           5,
-    siegePct:      45,
-    atkUnits:      { infantry:8000, cavalry:2000, archers:2000, siege:0 },
-    defUnits:      { infantry:3000, cavalry:1000, archers:1000, siege:0 },
-  });
-  BattleOverlay.update();
+  // 초기 주둔군 및 AI 사단 생성은 원클릭 시작 버튼에서 수행
 
   // ▶ 원클릭 시작 버튼
   document.getElementById('oneclick-start-btn').addEventListener('click', function () {
