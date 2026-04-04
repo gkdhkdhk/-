@@ -285,9 +285,10 @@
     <span class="phase-chip done">Phase 1 ✓ 완료</span>
     <span class="phase-chip done">Phase 2 ✓ 완료</span>
     <span class="phase-chip done">Phase 3 ✓ 완료</span>
-    <span class="phase-chip active">Phase 4 🔥 진행</span>
-    <span class="phase-chip pending">Phase 5 대기</span>
+    <span class="phase-chip done">Phase 4 ✓ 완료</span>
+    <span class="phase-chip active">Phase 5 🔥 진행</span>
     <span class="phase-chip pending">Phase 6 대기</span>
+    <span class="phase-chip pending">Phase 7 대기</span>
   </div>
 </div>
 
@@ -472,48 +473,82 @@
 </div>
 
 <!-- ═══════════════════════════════════════════
-     Phase 4 — 경제+이벤트+UI
+     Phase 4 — 전투 오버레이
+═══════════════════════════════════════════ -->
+<div class="phase-section">
+  <div class="phase-header done">
+    <div class="phase-num" style="color:#4caf50">④</div>
+    <div>
+      <div class="phase-name">Phase 4 — 전투 오버레이</div>
+      <div class="phase-desc">빅토리아3 스타일 실시간 전투 시각화</div>
+    </div>
+    <div class="phase-status-label" style="background:#1a4a1a;color:#4caf50">✓ 완료</div>
+  </div>
+  <div class="module-grid">
+
+    <div class="module-card status-done">
+      <div class="diff-stars">★★☆</div>
+      <div class="module-top">
+        <div class="module-id">M07+</div>
+        <div class="module-name">전투 오버레이 시스템</div>
+        <span class="status-badge done">✓ 완료</span>
+      </div>
+      <div class="module-desc">전투 카드, 공성전 카드, 프로빈스 상태 배지, AI 자동 전투</div>
+      <div class="module-features">
+        <span class="feature-tag done">전투 카드 오버레이</span>
+        <span class="feature-tag done">공성전 카드</span>
+        <span class="feature-tag done">프로빈스 상태 배지</span>
+        <span class="feature-tag done">전투 상세 패널</span>
+        <span class="feature-tag done">AI 자동 전투</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     Phase 5 — 경제+이벤트+UI
 ═══════════════════════════════════════════ -->
 <div class="phase-section">
   <div class="phase-header active">
-    <div class="phase-num" style="color:#f5a623">④</div>
+    <div class="phase-num" style="color:#f5a623">⑤</div>
     <div>
-      <div class="phase-name">Phase 4 — 경제+이벤트+UI</div>
+      <div class="phase-name">Phase 5 — 경제+이벤트+UI</div>
       <div class="phase-desc">게임이 실제로 돌아가는 상태</div>
     </div>
     <div class="phase-status-label" style="background:#3a1a00;color:#f5a623">🔥 진행 중</div>
   </div>
   <div class="module-grid">
 
-    <div class="module-card status-pending">
+    <div class="module-card status-done">
       <div class="diff-stars">★★☆</div>
       <div class="module-top">
         <div class="module-id">M09</div>
         <div class="module-name">경제 엔진</div>
-        <span class="status-badge pending">대기</span>
+        <span class="status-badge done">✓ 완료</span>
       </div>
       <div class="module-desc">자원관리, 자동건설, 민심, 세금 (비개입 원칙)</div>
       <div class="module-features">
-        <span class="feature-tag todo">세금 계산</span>
-        <span class="feature-tag todo">자동 건설</span>
-        <span class="feature-tag todo">민심 시스템</span>
-        <span class="feature-tag todo">자원 흐름</span>
+        <span class="feature-tag done">세금 계산</span>
+        <span class="feature-tag done">자원 흐름</span>
+        <span class="feature-tag done">식량 시스템</span>
+        <span class="feature-tag done">자원 교역</span>
       </div>
     </div>
 
-    <div class="module-card status-pending">
+    <div class="module-card status-done">
       <div class="diff-stars">★★★</div>
       <div class="module-top">
         <div class="module-id">M13</div>
         <div class="module-name">이벤트 엔진</div>
-        <span class="status-badge pending">대기</span>
+        <span class="status-badge done">✓ 완료</span>
       </div>
       <div class="module-desc">JSON 로드, 조건 평가, 선택지, 효과 처리</div>
       <div class="module-features">
-        <span class="feature-tag todo">JSON 파서</span>
-        <span class="feature-tag todo">조건 평가기</span>
-        <span class="feature-tag todo">선택지 UI</span>
-        <span class="feature-tag todo">효과 실행기</span>
+        <span class="feature-tag done">이벤트 정의</span>
+        <span class="feature-tag done">조건 평가기</span>
+        <span class="feature-tag done">선택지 UI</span>
+        <span class="feature-tag done">효과 실행기</span>
       </div>
     </div>
 
@@ -531,8 +566,8 @@
           <span class="feature-tag done">알림 시스템</span>
           <span class="feature-tag done">전투 오버레이 카드</span>
           <span class="feature-tag done">전투 상세 패널</span>
-          <span class="feature-tag todo">이벤트 팝업</span>
-          <span class="feature-tag todo">미니맵</span>
+          <span class="feature-tag done">이벤트 팝업</span>
+          <span class="feature-tag done">미니맵</span>
         </div>
       </div>
 
@@ -540,13 +575,13 @@
 </div>
 
 <!-- ═══════════════════════════════════════════
-     Phase 5 — 전쟁+교역+외교
+     Phase 6 — 전쟁+교역+외교
 ═══════════════════════════════════════════ -->
 <div class="phase-section">
   <div class="phase-header pending">
-    <div class="phase-num" style="color:#445">⑤</div>
+    <div class="phase-num" style="color:#445">⑥</div>
     <div>
-      <div class="phase-name">Phase 5 — 전쟁+교역+외교</div>
+      <div class="phase-name">Phase 6 — 전쟁+교역+외교</div>
       <div class="phase-desc">외부 상호작용 완성</div>
     </div>
     <div class="phase-status-label" style="background:#1a1a2e;color:#445">⬜ 대기</div>
@@ -605,13 +640,13 @@
 </div>
 
 <!-- ═══════════════════════════════════════════
-     Phase 6 — 기술+AI+완성
+     Phase 7 — 기술+AI+완성
 ═══════════════════════════════════════════ -->
 <div class="phase-section">
   <div class="phase-header pending">
-    <div class="phase-num" style="color:#445">⑥</div>
+    <div class="phase-num" style="color:#445">⑦</div>
     <div>
-      <div class="phase-name">Phase 6 — 기술+AI+완성</div>
+      <div class="phase-name">Phase 7 — 기술+AI+완성</div>
       <div class="phase-desc">한 판 플레이 가능한 상태</div>
     </div>
     <div class="phase-status-label" style="background:#1a1a2e;color:#445">⬜ 대기</div>
@@ -734,7 +769,7 @@
 </div>
 
 <div class="footer">
-  GDD 기반 | 총 18개 모듈 | Phase 3/6 완료, Phase 4 진행 중 | HTML Canvas + JavaScript 프로토타입
+  GDD 기반 | 총 18개 모듈 | Phase 4/7 완료, Phase 5 진행 중 | HTML Canvas + JavaScript 프로토타입
 </div>
 
 <script>
