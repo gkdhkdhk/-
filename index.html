@@ -4028,6 +4028,36 @@ const MinimapRenderer = (() => {
       _ctx.stroke();
     });
 
+    // 교역로 라인 렌더링
+    if (typeof TradeRouteManager !== 'undefined') {
+      const _centroid = poly => ({
+        x: poly.reduce((s, [x]) => s + x, 0) / poly.length,
+        y: poly.reduce((s, [, y]) => s + y, 0) / poly.length,
+      });
+      const routes = TradeRouteManager.getRoutes();
+      routes.forEach(r => {
+        try {
+          const fp = ProvinceManager.getById(r.fromProvId);
+          const tp = ProvinceManager.getById(r.toProvId);
+          if (!fp || !tp || !fp.polygon || !tp.polygon) return;
+          const fc = _centroid(fp.polygon);
+          const tc = _centroid(tp.polygon);
+          const mx1 = offX + (fc.x - bounds.minX) * mmScale;
+          const my1 = offY + (fc.y - bounds.minY) * mmScale;
+          const mx2 = offX + (tc.x - bounds.minX) * mmScale;
+          const my2 = offY + (tc.y - bounds.minY) * mmScale;
+          _ctx.beginPath();
+          _ctx.moveTo(mx1, my1);
+          _ctx.lineTo(mx2, my2);
+          _ctx.strokeStyle = r.active ? 'rgba(80,200,120,0.7)' : 'rgba(233,69,96,0.5)';
+          _ctx.lineWidth = 1.5;
+          _ctx.setLineDash([3, 3]);
+          _ctx.stroke();
+          _ctx.setLineDash([]);
+        } catch(e) {}
+      });
+    }
+
     // 뷰포트 사각형
     const vs = MapRenderer.getViewState();
     if (vs) {
@@ -4186,14 +4216,29 @@ const AlertSystem = (() => {
       action: 'open_province',
     },
     {
-      id: 'no_trade',
-      icon: '🛤',
+      id: 'no_trade_route',
+      icon: '📦',
       text: '교역로 없음',
       detail: '교역로를 개설하면 매월 금화를 추가로 획득할 수 있습니다.',
       priority: 'low',
-      check: () => {
+      check() {
         try {
-          return TradeRouteManager.getRoutes().filter(r => r.active).length <= 1;
+          return typeof TradeRouteManager !== 'undefined'
+            && TradeRouteManager.getFactionRoutes('고려').length === 0;
+        } catch(e) { return false; }
+      },
+      action: 'open_trade',
+    },
+    {
+      id: 'trade_blocked',
+      icon: '🚫',
+      text: '교역로 차단',
+      detail: '전쟁으로 인해 교역로가 차단되었습니다.',
+      priority: 'medium',
+      check() {
+        try {
+          return typeof TradeRouteManager !== 'undefined'
+            && TradeRouteManager.getFactionRoutes('고려').some(r => !r.active);
         } catch(e) { return false; }
       },
       action: 'open_trade',
@@ -4788,40 +4833,61 @@ const ActionPanels = (() => {
 
   // ── 교역로 패널 ──
   function openTrade() {
-    _open('🛤', '교역로 관리', () => {
-      const routes = TradeRouteManager.getRoutes();
+    _open('📦', '교역로 관리', () => {
+      const myRoutes = TradeRouteManager.getFactionRoutes('고려');
+      const internalIncome = TradeRouteManager.calcInternalTradeIncome('고려');
       const fst = FactionManager.getFactionState('고려');
       const gold = fst ? Math.floor(fst.gold) : 0;
       let html = `<div class="ap-section">
         <div class="ap-section-title">월 교역 수익</div>
+        <div class="ap-row"><span class="ap-label">내부 교역 수입</span>
+          <span class="ap-value positive">+${internalIncome}💰/월</span></div>
         <div class="ap-row"><span class="ap-label">총 예상 수익</span>
-          <span class="ap-value positive">+${TradeRouteManager.calcMonthlyIncome()}💰/월</span></div>
+          <span class="ap-value positive">+${TradeRouteManager.calcMonthlyIncome('고려')}💰/월</span></div>
         <div class="ap-row"><span class="ap-label">보유 금화</span>
           <span class="ap-value">${gold}💰</span></div>
       </div>
-      <div class="ap-section"><div class="ap-section-title">교역로 목록</div>`;
-      for (const r of routes) {
-        const stLabel = r.blocked ? '⚔차단' : r.active ? '✅운영 중' : '⛔미개설';
-        const stClass = r.blocked ? 'negative' : r.active ? 'positive' : '';
-        html += `<div class="ap-row">
-          <span class="ap-label">${r.name}<br><small style="color:#6a8aaa">${r.goods} → ${r.to}</small></span>
-          <span class="ap-value ${stClass}">${stLabel}</span>
-        </div>`;
-        if (!r.active && !r.blocked) {
-          html += `<button class="ap-action-btn" onclick="TradeRouteManager.openRoute('${r.id}');ActionPanels.openTrade()"
-            ${gold < 50 ? 'disabled' : ''}>
-            <span>🛤</span> 개설 <span class="btn-cost">💰50</span>
+      <div class="ap-section"><div class="ap-section-title">📦 교역로 현황</div>`;
+      if (myRoutes.length === 0) {
+        html += `<div class="ap-row"><span class="ap-label" style="color:#556">활성 교역로 없음</span></div>`;
+      } else {
+        myRoutes.forEach(r => {
+          try {
+            const fp = ProvinceManager.getById(r.fromProvId);
+            const tp = ProvinceManager.getById(r.toProvId);
+            const status = r.active
+              ? '<span style="color:#4ecf8a">● 운영 중</span>'
+              : '<span style="color:#e94560">✕ 전쟁 차단</span>';
+            html += `<div class="ap-row">
+              <span class="ap-label">${fp ? fp.name : '(알 수 없음)'} ↔ ${tp ? tp.name : '(알 수 없음)'}<br>
+                <small style="color:#6a8aaa">${r.months}개월 운영</small></span>
+              <span class="ap-value">${status}</span>
+            </div>
+            <button class="ap-action-btn" onclick="TradeRouteManager.removeRoute(${r.id});ActionPanels.openTrade()">
+              ❌ 교역로 폐쇄
+            </button>`;
+          } catch(e) {}
+        });
+      }
+      html += '</div><div class="ap-section"><div class="ap-section-title">교역로 개설</div>';
+      const myProvs = typeof ProvinceManager.getFactionProvinces === 'function'
+        ? ProvinceManager.getFactionProvinces('고려') : [];
+      const otherProvs = typeof ProvinceManager.getAll === 'function'
+        ? ProvinceManager.getAll().filter(p => p.faction !== '고려' && p.faction !== '미지') : [];
+      if (myProvs.length > 0 && otherProvs.length > 0) {
+        const myProv = myProvs[0];
+        const candidates = otherProvs.slice(0, 4);
+        candidates.forEach(op => {
+          const rel = typeof FactionManager.getRelation === 'function'
+            ? FactionManager.getRelation('고려', op.faction) : 0;
+          const canAfford = gold >= TradeRouteManager.ROUTE_COST;
+          const canOpen = rel >= 0 && canAfford;
+          html += `<button class="ap-action-btn" ${!canOpen ? 'disabled' : ''}
+            onclick="TradeRouteManager.createRoute(${myProv.id},${op.id});ActionPanels.openTrade()">
+            📦 ${myProv.name} → ${op.name} 교역로 개설
+            <span class="btn-cost">💰${TradeRouteManager.ROUTE_COST}</span>
           </button>`;
-        } else if (r.active && !r.blocked) {
-          html += `<button class="ap-action-btn" onclick="TradeRouteManager.closeRoute('${r.id}');ActionPanels.openTrade()">
-            <span>🚫</span> 폐쇄
-          </button>`;
-        }
-        if (r.active) {
-          html += `<div style="font-size:10px;color:#6a8aaa;margin-bottom:6px">
-            누적 수익: ${r.totalEarned}💰 / ${r.monthsActive}개월 운영
-          </div>`;
-        }
+        });
       }
       html += '</div>';
       return html;
@@ -4889,13 +4955,7 @@ const WarSystem = (() => {
     Notifications.push(`⚔ ${attacker} → ${defender} 전쟁 선포! (목표: ${_goalText(warGoal)})`, 'alert');
     if (typeof AlertSystem !== 'undefined') AlertSystem.refresh();
 
-    // 교역로 차단
-    if (typeof TradeRouteManager !== 'undefined') {
-      TradeRouteManager.getRoutes().forEach(r => {
-        if ((r.from === attacker && r.to === defender) || (r.from === defender && r.to === attacker))
-          TradeRouteManager.blockRoute && TradeRouteManager.blockRoute(r.id);
-      });
-    }
+    // 교역로는 TradeRouteManager.onMonthTick() 내 _updateActiveStates()에서 자동 차단됨
     return true;
   }
 
@@ -5085,123 +5145,7 @@ const WarSystem = (() => {
   };
 })();
 
-/* ════════════════════════════════════════════════════════
-   M10 — TRADE ROUTE MANAGER
-   교역로 시스템: 세력 간 교역로 생성·관리, 월별 수익 계산
-════════════════════════════════════════════════════════ */
-const TradeRouteManager = (() => {
-  'use strict';
 
-  // 교역로 정의: 한반도 지리 기반 실제 교역 경로
-  const ROUTE_DEFS = [
-    { id: 'silk_road_east',  name: '동방 실크로드', from: '고려', to: '동방',   goods: '비단',   baseGold: 18, basePower: 0 },
-    { id: 'northern_fur',    name: '북방 모피로',   from: '고려', to: '북방부족', goods: '모피',  baseGold: 12, basePower: 0 },
-    { id: 'southern_spice',  name: '남방 향신료로', from: '고려', to: '남방',   goods: '향신료', baseGold: 15, basePower: 0 },
-    { id: 'sea_trade',       name: '해상 교역로',  from: '고려', to: '해상세력', goods: '도자기', baseGold: 20, basePower: 0 },
-    { id: 'inner_market',    name: '내륙 교역로',  from: '고려', to: '고려',   goods: '곡물',   baseGold:  8, basePower: 0 },
-  ];
-
-  // 활성화된 교역로 상태: { routeId → { active, blocked, monthsActive, totalEarned } }
-  const _state = {};
-
-  function init() {
-    for (const r of ROUTE_DEFS) {
-      _state[r.id] = { active: false, blocked: false, monthsActive: 0, totalEarned: 0 };
-    }
-    // 내륙 교역로는 기본 활성화
-    _state['inner_market'].active = true;
-  }
-
-  // 교역로 활성화 (금화 50 비용)
-  function openRoute(routeId) {
-    const route = ROUTE_DEFS.find(r => r.id === routeId);
-    if (!route) return false;
-    const st = _state[routeId];
-    if (st.active) return false;
-
-    const faction = FactionManager.getFactionState('고려');
-    if (!faction || faction.gold < 50) return false;
-
-    FactionManager.addGold('고려', -50);
-    st.active = true;
-    st.blocked = false;
-
-    if (typeof Notifications !== 'undefined') {
-      Notifications.push(`🛤 교역로 개설: ${route.name} (+${route.baseGold}💰/월)`);
-    }
-    return true;
-  }
-
-  // 교역로 폐쇄
-  function closeRoute(routeId) {
-    const st = _state[routeId];
-    if (!st) return;
-    st.active = false;
-    const route = ROUTE_DEFS.find(r => r.id === routeId);
-    if (route && typeof Notifications !== 'undefined') {
-      Notifications.push(`🚫 교역로 폐쇄: ${route.name}`);
-    }
-  }
-
-  // 월별 수익 계산 및 적용
-  function onMonthTick() {
-    let totalIncome = 0;
-    for (const route of ROUTE_DEFS) {
-      const st = _state[route.id];
-      if (!st.active || st.blocked) continue;
-
-      // 관계도 보너스: 상대 세력과 관계가 좋을수록 수익 증가
-      let multiplier = 1.0;
-      if (route.to !== '고려' && typeof FactionManager.getRelation === 'function') {
-        const rel = FactionManager.getRelation('고려', route.to);
-        if (rel > 50)  multiplier = 1.5;
-        else if (rel > 25) multiplier = 1.25;
-        else if (rel < -25) multiplier = 0.5;
-        else if (rel < 0)   multiplier = 0.75;
-      }
-
-      // 전쟁 중이면 교역로 차단
-      if (route.to !== '고려' && typeof WarSystem !== 'undefined' && WarSystem.isAtWar && WarSystem.isAtWar('고려', route.to)) {
-        st.blocked = true;
-        if (typeof Notifications !== 'undefined') {
-          Notifications.push(`⚔ 교역로 차단: ${route.name} (전쟁 중)`);
-        }
-        continue;
-      } else {
-        st.blocked = false;
-      }
-
-      const income = Math.floor(route.baseGold * multiplier);
-      FactionManager.addGold('고려', income);
-      st.monthsActive++;
-      st.totalEarned += income;
-      totalIncome += income;
-    }
-    return totalIncome;
-  }
-
-  // 교역로 차단 (전쟁 이벤트 등에서 외부 호출)
-  function blockRoute(routeId) {
-    if (_state[routeId]) _state[routeId].blocked = true;
-  }
-
-  function getRoutes() {
-    return ROUTE_DEFS.map(r => ({ ...r, ...(_state[r.id] || {}) }));
-  }
-
-  function getState(routeId) { return _state[routeId]; }
-
-  function calcMonthlyIncome() {
-    let total = 0;
-    for (const r of ROUTE_DEFS) {
-      const st = _state[r.id];
-      if (st && st.active && !st.blocked) total += r.baseGold;
-    }
-    return total;
-  }
-
-  return { init, openRoute, closeRoute, onMonthTick, blockRoute, getRoutes, getState, calcMonthlyIncome };
-})();
 
 // ═══════════════════════════════════════════════════════
 //  DiplomacyManager — M11 외교 고도화
@@ -5399,11 +5343,158 @@ const DiplomacyManager = (() => {
   };
 })();
 
+// ═══════════════════════════════════════════════════════
+//  TradeRouteManager — M12 교역로 시스템
+// ═══════════════════════════════════════════════════════
+const TradeRouteManager = (() => {
+  'use strict';
+
+  const ROUTE_COST = 30;           // 교역로 개설 비용
+  const BASE_TRADE_INCOME = 12;    // 기본 교역 수입/월
+  const PORT_BONUS = 8;            // 항구 건물 보너스
+  const MARKET_BONUS = 6;          // 교역소/시장 보너스
+
+  // _routes: [{ id, fromProvId, toProvId, fromFaction, toFaction, active, months }]
+  const _routes = [];
+  let _idCounter = 1;
+
+  function _getProvince(provId) {
+    try { return ProvinceManager.getById(provId); } catch(e) { return null; }
+  }
+
+  function _calcRouteIncome(prov) {
+    if (!prov) return BASE_TRADE_INCOME;
+    let bonus = BASE_TRADE_INCOME;
+    if (prov.buildings) {
+      if (prov.buildings.includes('항구'))  bonus += PORT_BONUS;
+      if (prov.buildings.includes('교역소')) bonus += MARKET_BONUS;
+      if (prov.buildings.includes('시장'))  bonus += MARKET_BONUS;
+    }
+    bonus = Math.round(bonus * (1 + (prov.development || 0) * 0.05));
+    return bonus;
+  }
+
+  /** 교역로 개설 */
+  function createRoute(fromProvId, toProvId) {
+    const fromProv = _getProvince(fromProvId);
+    const toProv   = _getProvince(toProvId);
+    if (!fromProv || !toProv) {
+      Notifications.push('교역로 개설 실패: 프로빈스를 찾을 수 없습니다', 'warn');
+      return false;
+    }
+    const fromFaction = fromProv.faction;
+    const toFaction   = toProv.faction;
+    if (fromFaction === toFaction) {
+      Notifications.push('같은 세력 내 교역로는 자동 적용됩니다', 'warn');
+      return false;
+    }
+    const rel = typeof FactionManager.getRelation === 'function'
+      ? FactionManager.getRelation(fromFaction, toFaction) : 0;
+    if (rel < 0) {
+      Notifications.push(`교역로 개설 실패: ${fromFaction} ↔ ${toFaction} 관계도 0 이상 필요 (현재 ${rel})`, 'warn');
+      return false;
+    }
+    const exists = _routes.find(r =>
+      (r.fromProvId === fromProvId && r.toProvId === toProvId) ||
+      (r.fromProvId === toProvId   && r.toProvId === fromProvId));
+    if (exists) {
+      Notifications.push('이미 존재하는 교역로입니다', 'warn');
+      return false;
+    }
+    const st = FactionManager.getFactionState(fromFaction);
+    if (!st || (st.gold || 0) < ROUTE_COST) {
+      Notifications.push(`교역로 개설 비용: 💰${ROUTE_COST} 부족`, 'warn');
+      return false;
+    }
+    st.gold -= ROUTE_COST;
+    _routes.push({
+      id: _idCounter++,
+      fromProvId, toProvId,
+      fromFaction, toFaction,
+      active: true,
+      months: 0,
+    });
+    Notifications.push(`📦 교역로 개설: ${fromProv.name} ↔ ${toProv.name} (+${_calcRouteIncome(fromProv) + _calcRouteIncome(toProv)}💰/월)`, 'good');
+    return true;
+  }
+
+  /** 교역로 삭제 */
+  function removeRoute(routeId) {
+    const idx = _routes.findIndex(r => r.id === routeId);
+    if (idx === -1) return false;
+    _routes.splice(idx, 1);
+    Notifications.push(`❌ 교역로 폐쇄: 경로 #${routeId}`, 'warn');
+    return true;
+  }
+
+  /** 전쟁 상태에 따른 교역로 활성화/비활성화 */
+  function _updateActiveStates() {
+    _routes.forEach(route => {
+      const atWar = typeof WarSystem !== 'undefined' && WarSystem.isAtWar
+        ? WarSystem.isAtWar(route.fromFaction, route.toFaction)
+        : false;
+      route.active = !atWar;
+    });
+  }
+
+  /** 월별 교역 수입 처리 */
+  function onMonthTick() {
+    _updateActiveStates();
+    _routes.forEach(route => {
+      if (!route.active) return;
+      route.months++;
+      const fromProv = _getProvince(route.fromProvId);
+      const toProv   = _getProvince(route.toProvId);
+      const fromIncome = _calcRouteIncome(fromProv);
+      const toIncome   = _calcRouteIncome(toProv);
+
+      const fromSt = FactionManager.getFactionState(route.fromFaction);
+      const toSt   = FactionManager.getFactionState(route.toFaction);
+      if (fromSt) fromSt.gold = (fromSt.gold || 0) + fromIncome;
+      if (toSt)   toSt.gold   = (toSt.gold   || 0) + toIncome;
+    });
+  }
+
+  function getRoutes() { return [..._routes]; }
+
+  function getFactionRoutes(factionId) {
+    return _routes.filter(r => r.fromFaction === factionId || r.toFaction === factionId);
+  }
+
+  /** 세력의 프로빈스 건물 기반 내부 교역 수입 계산 (정보 표시용) */
+  function calcInternalTradeIncome(factionId) {
+    const provs = typeof ProvinceManager.getFactionProvinces === 'function'
+      ? ProvinceManager.getFactionProvinces(factionId) : [];
+    return provs.reduce((sum, p) => {
+      if (!p.buildings) return sum;
+      if (p.buildings.includes('교역소') || p.buildings.includes('시장')) sum += MARKET_BONUS;
+      if (p.buildings.includes('항구')) sum += PORT_BONUS;
+      return sum;
+    }, 0);
+  }
+
+  /** 세력의 월 교역 총 수입 (내부 + 외부 교역로) */
+  function calcMonthlyIncome(factionId) {
+    const f = factionId || '고려';
+    const internal = calcInternalTradeIncome(f);
+    const routeIncome = getFactionRoutes(f).filter(r => r.active).reduce((s, r) => {
+      const prov = r.fromFaction === f ? _getProvince(r.fromProvId) : _getProvince(r.toProvId);
+      return s + _calcRouteIncome(prov);
+    }, 0);
+    return internal + routeIncome;
+  }
+
+  return {
+    createRoute, removeRoute, onMonthTick,
+    getRoutes, getFactionRoutes, calcInternalTradeIncome, calcMonthlyIncome,
+    ROUTE_COST, BASE_TRADE_INCOME,
+  };
+})();
+
 window.addEventListener('load', () => {
   MapRenderer.init();
   Notifications.init();
   GameCore.start();
-  TradeRouteManager.init();
 
   // 타임바
   GameCore.on('tick',     s  => TimeBar.update(s));
