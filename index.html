@@ -4723,6 +4723,7 @@ const WarSystem = (() => {
 
   // ── 밸런스 상수 ──
   const WAR_COST                   = 50;   // 전쟁 선포 금화 비용
+  const BASE_MILITARY_POWER        = 100;  // 기본 군사력 (가산)
   const OCCUPATION_THRESHOLD       = 0.7;  // 점령 성공 군사력 비율 (공격 > 방어 × 70%)
   const TRIBUTE_AMOUNT             = 20;   // 조공 강화 월 지급액
   const TRIBUTE_DURATION_MONTHS    = 6;    // 조공 강화 지속 개월
@@ -4745,7 +4746,7 @@ const WarSystem = (() => {
     if (!g) return '조공';
     if (g.type === 'annex')    return '합병';
     if (g.type === 'tribute')  return '조공';
-    if (g.type === 'province') return `프로빈스 ${g.targetProvinceId} 할양`;
+    if (g.type === 'province') return `프로빈스 ${g.targetProvinceId || '?'} 할양`;
     return g.type;
   }
 
@@ -4784,11 +4785,11 @@ const WarSystem = (() => {
 
   // ── 군사력 계산 헬퍼 ──
   function _calcMilitaryPower(faction, specificProvinceId) {
-    if (typeof MilitaryManager === 'undefined' || !MilitaryManager.getGarrisonPower) return 100;
-    if (specificProvinceId) return MilitaryManager.getGarrisonPower(specificProvinceId) + 100;
+    if (typeof MilitaryManager === 'undefined' || !MilitaryManager.getGarrisonPower) return BASE_MILITARY_POWER;
+    if (specificProvinceId) return MilitaryManager.getGarrisonPower(specificProvinceId) + BASE_MILITARY_POWER;
     return ProvinceManager.getFactionProvinces(faction).reduce(
       (sum, p) => sum + MilitaryManager.getGarrisonPower(p.id), 0
-    ) + 100;
+    ) + BASE_MILITARY_POWER;
   }
 
   // ── 점령 시도 (세력 기반) ──
@@ -4805,14 +4806,21 @@ const WarSystem = (() => {
     if (atkMil > defMil * OCCUPATION_THRESHOLD) {
       _occupations[provinceId] = { occupiedBy: attackerFaction, since: _currentMonth };
       const war = getWar(attackerFaction, defender) || getWar(defender, attackerFaction);
-      if (war && war.attacker === attackerFaction) war.battleWins.atk++;
+      if (war) {
+        if (war.attacker === attackerFaction) war.battleWins.atk++;
+        else war.battleWins.def++;
+      }
       Notifications.push(`🏴 ${attackerFaction}: ${province.name} 점령 성공!`, 'good');
       if (typeof MapRenderer !== 'undefined' && MapRenderer.markDirty) MapRenderer.markDirty();
       if (typeof AlertSystem !== 'undefined') AlertSystem.refresh();
       return true;
     } else {
-      const defWar = getWar(defender, attackerFaction) || getWar(attackerFaction, defender);
-      if (defWar && defWar.defender === attackerFaction) defWar.battleWins.def++;
+      // 방어 성공: province 소유 세력의 전투 승리 기록
+      const war = getWar(attackerFaction, defender) || getWar(defender, attackerFaction);
+      if (war) {
+        if (war.defender === defender) war.battleWins.def++;
+        else war.battleWins.atk++;
+      }
       Notifications.push(`🛡 ${province.name} 점령 실패 (방어 성공)`, '');
       return false;
     }
@@ -4856,8 +4864,10 @@ const WarSystem = (() => {
       FactionManager.modRelation(to, from, -20);
       Notifications.push(`💰 ${from} → ${to} 조공 강화 (${TRIBUTE_DURATION_MONTHS}개월, ${TRIBUTE_AMOUNT}💰/월)`, 'good');
     } else if (terms.type === 'annexation') {
+      // 승자(to)가 점령 중인 패자(from) 소유 프로빈스를 영구 할양
       const provinces = terms.provinces || Object.keys(_occupations).filter(pid => {
-        return _occupations[pid] && _occupations[pid].occupiedBy === to;
+        const p = ProvinceManager.getById(pid);
+        return _occupations[pid] && _occupations[pid].occupiedBy === to && p && p.faction === from;
       });
       provinces.forEach(pid => {
         const p = ProvinceManager.getById(pid);
@@ -4930,7 +4940,7 @@ const WarSystem = (() => {
 
   // ── 월별 종합 처리 ──
   function onMonthTick(month) {
-    _currentMonth = (month !== undefined) ? month : (_currentMonth + 1);
+    if (month !== undefined) _currentMonth = month;
     processTributes();
     processOccupationIncome();
     checkAutopeace();
