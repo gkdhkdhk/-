@@ -6023,6 +6023,23 @@ const AIManager = (() => {
   /** AI 활성 여부 */
   let _enabled = true;
 
+  // ── AI 행동 임계값 상수 ──
+  const MILITARY_ACTION_THRESHOLD  = 0.5;
+  const MILITARY_COOLDOWN_MONTHS   = 3;
+  const HIGH_AGGRESSION_THRESHOLD  = 0.7;  // 플레이어 공격 최소 aggression
+  const DIPLOMACY_ACTION_THRESHOLD = 0.4;
+  const ECONOMY_ACTION_THRESHOLD   = 0.5;
+  const MAX_GOLD_FOR_DEVELOPMENT   = 100;  // 이 이상이면 경제 AI 스킵
+  const DEVELOPMENT_COST           = 50;
+  const MAX_DEVELOPMENT_LEVEL      = 6;
+  const MIN_RELATION_IMPROVEMENT   = 5;
+  const MAX_RELATION_IMPROVEMENT   = 15;
+  const ALLIANCE_RELATION_THRESHOLD = 60;  // 이 이상이면 비공격 협약 시도
+  const NOTIFICATION_CHANCE        = 0.5;
+  const MAX_AI_TROOPS              = 3000;
+  const RECRUITMENT_COST           = 80;
+  const RECRUIT_UNITS              = { infantry: 500, cavalry: 100, archers: 100, siege: 0 };
+
   // ── 내부 헬퍼 ──
 
   function _rand() { return Math.random(); }
@@ -6070,7 +6087,7 @@ const AIManager = (() => {
           const np = ProvinceManager.getById(nId);
           if (!np || np.faction === factionId || np.faction === '미지') continue;
           // 플레이어 영토는 고공격성일 때만 공격
-          if (np.faction === PLAYER_FACTION && personality.aggression <= 0.7) continue;
+          if (np.faction === PLAYER_FACTION && personality.aggression <= HIGH_AGGRESSION_THRESHOLD) continue;
           return np;
         }
       }
@@ -6084,9 +6101,9 @@ const AIManager = (() => {
       if (_isAtWar(factionId)) return;
       const now = _currentMonth();
       const last = _lastMilitaryActionMonth[factionId] || -999;
-      if (now - last < 3) return; // 3개월 쿨다운
+      if (now - last < MILITARY_COOLDOWN_MONTHS) return; // 쿨다운
 
-      if (personality.aggression * _rand() <= 0.5) return;
+      if (personality.aggression * _rand() <= MILITARY_ACTION_THRESHOLD) return;
 
       const divs = MilitaryManager.getDivisionsByFaction(factionId);
       if (!divs || divs.length === 0) return;
@@ -6111,25 +6128,25 @@ const AIManager = (() => {
   function _doDiplomacyAction(factionId, personality) {
     try {
       if (_isAtWar(factionId)) return;
-      if (personality.diplomacy * _rand() <= 0.4) return;
+      if (personality.diplomacy * _rand() <= DIPLOMACY_ACTION_THRESHOLD) return;
 
       const allFactions = AI_FACTIONS.concat([PLAYER_FACTION]).filter(f => f !== factionId);
       for (const target of allFactions) {
         const rel = FactionManager.getRelation(factionId, target);
         if (rel >= 30) continue;
 
-        const delta = 5 + Math.floor(_rand() * 11); // +5 ~ +15
+        const delta = MIN_RELATION_IMPROVEMENT + Math.floor(_rand() * (MAX_RELATION_IMPROVEMENT - MIN_RELATION_IMPROVEMENT + 1));
         FactionManager.modRelation(factionId, target, delta);
 
-        // 관계 > 60이면 비공격 협약 시도
+        // 관계 > 임계값이면 비공격 협약 시도
         const newRel = FactionManager.getRelation(factionId, target);
-        if (newRel > 60 && typeof DiplomacyManager !== 'undefined' &&
+        if (newRel > ALLIANCE_RELATION_THRESHOLD && typeof DiplomacyManager !== 'undefined' &&
             typeof DiplomacyManager.proposeAlliance === 'function') {
           try { DiplomacyManager.proposeAlliance(factionId, target); } catch (e2) { /* skip */ }
         }
 
-        // 50% 확률로 알림 표시
-        if (_rand() < 0.5 && typeof Notifications !== 'undefined') {
+        // 알림 (50% 확률)
+        if (_rand() < NOTIFICATION_CHANCE && typeof Notifications !== 'undefined') {
           Notifications.push(`🤝 ${factionId}이(가) ${target}과 관계를 개선했습니다`);
         }
         break; // 한 번에 1대상만
@@ -6145,16 +6162,16 @@ const AIManager = (() => {
   function _doEconomyAction(factionId, personality) {
     try {
       const st = FactionManager.getFactionState(factionId);
-      if (!st || st.gold >= 100) return;
-      if (personality.economy * _rand() <= 0.5) return;
-      if (st.gold < 50) return;
+      if (!st || st.gold >= MAX_GOLD_FOR_DEVELOPMENT) return;
+      if (personality.economy * _rand() <= ECONOMY_ACTION_THRESHOLD) return;
+      if (st.gold < DEVELOPMENT_COST) return;
 
       const provs = ProvinceManager.getFactionProvinces(factionId);
-      const target = provs.find(p => (p.development || 1) < 6);
+      const target = provs.find(p => (p.development || 1) < MAX_DEVELOPMENT_LEVEL);
       if (!target) return;
 
       target.development = (target.development || 1) + 1;
-      FactionManager.addGold(factionId, -50);
+      FactionManager.addGold(factionId, -DEVELOPMENT_COST);
     } catch (e) {
       console.warn('[AIManager] economy action error:', e);
     }
@@ -6166,20 +6183,18 @@ const AIManager = (() => {
   function _doRecruitAction(factionId) {
     try {
       const total = _getTotalTroops(factionId);
-      if (total >= 3000) return;
+      if (total >= MAX_AI_TROOPS) return;
 
       const st = FactionManager.getFactionState(factionId);
-      if (!st || st.gold <= 80) return;
+      if (!st || st.gold <= RECRUITMENT_COST) return;
 
       // 수도 프로빈스에 소규모 사단 추가 생성
       const fDef = ProvinceManager.getFaction(factionId);
       if (!fDef || !fDef.capital) return;
 
       if (typeof MilitaryManager.createDivision === 'function') {
-        MilitaryManager.createDivision(factionId, fDef.capital, {
-          infantry: 500, cavalry: 100, archers: 100, siege: 0,
-        });
-        FactionManager.addGold(factionId, -80);
+        MilitaryManager.createDivision(factionId, fDef.capital, { ...RECRUIT_UNITS });
+        FactionManager.addGold(factionId, -RECRUITMENT_COST);
       }
     } catch (e) {
       console.warn('[AIManager] recruit action error:', e);
