@@ -3639,10 +3639,17 @@ const EventEngine = (() => {
   let _eventQueue = [];
   let _activeEvent = null;
   let _activeContext = null;
+  let _pausedByEvent = false;
   const _cooldown = {}; // eventId:factionId → remaining months
 
   function _getFactions() {
     return Object.values(ProvinceManager.getFactions()).filter(f => f.id !== '미지');
+  }
+
+  function _tickCooldowns() {
+    Object.keys(_cooldown).forEach(k => {
+      if (_cooldown[k] > 0) _cooldown[k]--;
+    });
   }
 
   function _checkTrigger(def, faction, provinces) {
@@ -3652,7 +3659,6 @@ const EventEngine = (() => {
 
     const cdKey = def.id + ':' + faction.id;
     if (_cooldown[cdKey] && _cooldown[cdKey] > 0) {
-      _cooldown[cdKey]--;
       return false;
     }
 
@@ -3686,6 +3692,7 @@ const EventEngine = (() => {
 
   function checkEvents() {
     if (_activeEvent) return;
+    _tickCooldowns();
     const factions = _getFactions();
     factions.forEach(faction => {
       const provinces = ProvinceManager.getFactionProvinces(faction.id);
@@ -3749,7 +3756,7 @@ const EventEngine = (() => {
       choicesEl.appendChild(btn);
     });
 
-    if (!GameCore.getState().paused) GameCore.togglePause();
+    if (!GameCore.getState().paused) { _pausedByEvent = true; GameCore.togglePause(); }
     overlay.style.display = 'flex';
   }
 
@@ -3794,13 +3801,13 @@ const EventEngine = (() => {
 
     const overlay = document.getElementById('event-overlay');
     if (overlay) overlay.style.display = 'none';
-    if (GameCore.getState().paused) GameCore.togglePause();
+    if (_pausedByEvent && GameCore.getState().paused) { GameCore.togglePause(); _pausedByEvent = false; }
 
     _activeEvent   = null;
     _activeContext = null;
 
     setTimeout(() => {
-      if (_eventQueue.length) {
+      if (_eventQueue.length && !_activeEvent) {
         const next = _eventQueue.shift();
         showEvent(next.def, { faction: next.faction, targetFaction: next.targetFaction });
       }
