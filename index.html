@@ -848,6 +848,61 @@
   overflow: hidden; border: 1px solid #1a2a40; margin: 4px 0;
 }
 .ap-progress-fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
+
+/* ── M16 세이브/로드 모달 ── */
+#saveload-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.75); z-index: 1100;
+  align-items: center; justify-content: center;
+}
+#saveload-overlay.open { display: flex; }
+#saveload-modal {
+  background: #16213e; border: 1px solid #1a3a6a;
+  border-radius: 8px; width: 520px; max-width: 95vw;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.7);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+#saveload-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; background: #0f3460; border-bottom: 1px solid #1a3a6a;
+}
+#saveload-header h2 { margin: 0; font-size: 15px; color: #e0e0e0; }
+#saveload-close {
+  background: none; border: none; color: #8090a0; font-size: 18px;
+  cursor: pointer; padding: 2px 6px; border-radius: 4px;
+}
+#saveload-close:hover { background: #e94560; color: #fff; }
+#saveload-slots { padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; }
+.sl-slot {
+  background: #0f1e38; border: 1px solid #1a3a6a; border-radius: 6px;
+  padding: 10px 14px; display: flex; align-items: center; gap: 12px;
+}
+.sl-slot-name { font-size: 12px; color: #8090a0; width: 70px; flex-shrink: 0; }
+.sl-slot-info { flex: 1; }
+.sl-slot-date { font-size: 13px; color: #e0e0e0; font-weight: bold; }
+.sl-slot-time { font-size: 11px; color: #8090a0; margin-top: 2px; }
+.sl-slot-empty { font-size: 12px; color: #445; font-style: italic; }
+.sl-slot-btns { display: flex; gap: 6px; flex-shrink: 0; }
+.sl-btn {
+  padding: 5px 12px; border-radius: 4px; border: 1px solid;
+  font-size: 12px; cursor: pointer; transition: all 0.15s;
+}
+.sl-btn-save {
+  background: #0f3020; border-color: #2a7a4a; color: #6ecf9a;
+}
+.sl-btn-save:hover { background: #1a5030; }
+.sl-btn-load {
+  background: #0f2040; border-color: #2a5a9a; color: #6aacef;
+}
+.sl-btn-load:hover { background: #1a3060; }
+.sl-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.sl-btn-load:disabled:hover { background: #0f2040; }
+#saveload-btn {
+  background: #0f3460; border: 1px solid #1a4a8a;
+  color: #e0e0e0; padding: 5px 12px; border-radius: 4px;
+  font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 5px;
+}
+#saveload-btn:hover { background: #1a4a80; }
 </style>
 </head>
 <body>
@@ -887,6 +942,7 @@
       <button class="ctrl-btn" onclick="ActionPanels.openTech()" title="기술 연구" style="font-size:13px;padding:4px 8px">🔬</button>
     </div>
     <button id="oneclick-start-btn">▶ 원클릭 시작</button>
+    <button id="saveload-btn" onclick="SaveLoadManager.openModal()" title="세이브/로드">💾 세이브/로드</button>
     <a id="editor-link" href="editor.html" target="_blank"
        style="background:#0f3020;border:1px solid #2a7a4a;color:#6ecf9a;padding:5px 12px;border-radius:4px;font-size:12px;text-decoration:none;display:flex;align-items:center;gap:5px;transition:all 0.15s;"
        onmouseover="this.style.background='#1a5030'" onmouseout="this.style.background='#0f3020'">
@@ -1074,7 +1130,30 @@ const GameCore = (() => {
     });
   }
 
-  return { start, togglePause, setSpeed, getState, on, emit };
+  /** 게임 날짜/배속/정지 상태 직렬화 */
+  function saveState() {
+    return { year: state.year, month: state.month, day: state.day,
+             totalDays: state.totalDays, speed: state.speed, paused: state.paused, tick: state.tick };
+  }
+
+  /** 저장된 상태 복원 */
+  function loadState(data) {
+    if (!data) return;
+    state.year      = data.year      ?? state.year;
+    state.month     = data.month     ?? state.month;
+    state.day       = data.day       ?? state.day;
+    state.totalDays = data.totalDays ?? state.totalDays;
+    state.speed     = data.speed     ?? state.speed;
+    state.paused    = data.paused    ?? state.paused;
+    state.tick      = data.tick      ?? state.tick;
+    // UI 동기화
+    setSpeed(state.speed);
+    const btn = document.getElementById('pause-btn');
+    if (btn) { btn.textContent = state.paused ? '▶' : '⏸'; btn.classList.toggle('paused', state.paused); }
+    updateDateUI();
+  }
+
+  return { start, togglePause, setSpeed, getState, on, emit, saveState, loadState };
 })();
 
 
@@ -1344,10 +1423,32 @@ const ProvinceManager = (() => {
   document.getElementById('status-provinces').textContent = `프로빈스: ${PROVINCES_DATA.length}`;
   document.getElementById('status-factions').textContent = `세력: ${Object.keys(FACTIONS).length - 1}`;
 
+  /** 프로빈스 가변 속성 직렬화 (faction, development, buildings, population) */
+  function saveState() {
+    return PROVINCES_DATA.map(p => ({
+      id: p.id, faction: p.faction,
+      development: p.development, buildings: [...p.buildings], population: p.population
+    }));
+  }
+
+  /** 저장된 프로빈스 상태 복원 */
+  function loadState(data) {
+    if (!Array.isArray(data)) return;
+    data.forEach(saved => {
+      const p = byId[saved.id];
+      if (!p) return;
+      if (saved.faction     !== undefined) p.faction      = saved.faction;
+      if (saved.development !== undefined) p.development  = saved.development;
+      if (saved.buildings   !== undefined) p.buildings    = [...saved.buildings];
+      if (saved.population  !== undefined) p.population   = saved.population;
+    });
+  }
+
   return {
     getAll, getById, getByPickColor,
     getFactions, getFaction, getTerrain, getTerrains,
-    getFactionProvinces, getFactionPopulation
+    getFactionProvinces, getFactionPopulation,
+    saveState, loadState,
   };
 })();
 
@@ -2346,10 +2447,32 @@ const FactionManager = (() => {
     if (s) s.gold = Math.max(0, (s.gold || 0) + amount);
   }
 
+  /** 세력 상태 및 관계도 직렬화 */
+  function saveState() {
+    const factions = {};
+    Object.keys(FACTION_STATE).forEach(k => { factions[k] = { ...FACTION_STATE[k] }; });
+    const relations = { ...RELATIONS };
+    return { factions, relations };
+  }
+
+  /** 저장된 세력/관계도 상태 복원 */
+  function loadState(data) {
+    if (!data) return;
+    if (data.factions) {
+      Object.keys(data.factions).forEach(k => {
+        if (FACTION_STATE[k]) Object.assign(FACTION_STATE[k], data.factions[k]);
+      });
+    }
+    if (data.relations) {
+      Object.keys(data.relations).forEach(k => { RELATIONS[k] = data.relations[k]; });
+    }
+  }
+
   return {
     getRelation, modRelation, getRelationLabel,
     getFactionState, getAllFactionStates,
     calcMonthlyIncome, onMonthTick, addGold,
+    saveState, loadState,
   };
 })();
 
@@ -2540,10 +2663,25 @@ const CharacterManager = (() => {
     return true;
   }
 
+  /** 캐릭터 전체 배열 직렬화 */
+  function saveState() {
+    return { characters: characters.map(c => ({ ...c })), nextCharId };
+  }
+
+  /** 저장된 캐릭터 상태 복원 */
+  function loadState(data) {
+    if (!data) return;
+    if (Array.isArray(data.characters)) {
+      characters = data.characters.map(c => ({ ...c }));
+    }
+    if (data.nextCharId !== undefined) nextCharId = data.nextCharId;
+  }
+
   return {
     getAll, getById, getByFaction, getRuler, getHeir,
     getTrait, getAllTraits, getEffectiveStats,
     onYearTick, marry,
+    saveState, loadState,
   };
 })();
 
@@ -2911,6 +3049,28 @@ const MilitaryManager = (() => {
     });
   }
 
+  /** 군대 상태(주둔군 + 사단) 직렬화 */
+  function saveState() {
+    return {
+      garrisonData: JSON.parse(JSON.stringify(_garrisonData)),
+      divisions: _divisions.map(d => ({ ...d, units: { ...d.units } })),
+      nextDivId: _nextDivId,
+    };
+  }
+
+  /** 저장된 군대 상태 복원 */
+  function loadState(data) {
+    if (!data) return;
+    if (data.garrisonData) {
+      Object.keys(_garrisonData).forEach(k => delete _garrisonData[k]);
+      Object.assign(_garrisonData, JSON.parse(JSON.stringify(data.garrisonData)));
+    }
+    if (Array.isArray(data.divisions)) {
+      _divisions = data.divisions.map(d => ({ ...d, units: { ...d.units } }));
+    }
+    if (data.nextDivId !== undefined) _nextDivId = data.nextDivId;
+  }
+
   return {
     initGarrison, initAIDivisions,
     createDivision, moveDivision,
@@ -2923,6 +3083,7 @@ const MilitaryManager = (() => {
     getUnitTypes: () => UNIT_TYPES,
     getAdjacency: () => ADJACENCY,
     getMartialBonus: () => MARTIAL_BONUS_PER_POINT,
+    saveState, loadState,
   };
 })();
 
@@ -3671,7 +3832,18 @@ const EconomyEngine = (() => {
 
   _initStocks();
 
-  return { calcProvinceOutput, calcFactionResources, onMonthTick, getStock, getStocks, RESOURCE_YIELD, BUILDING_YIELD };
+  /** 자원 재고 직렬화 */
+  function saveState() {
+    return JSON.parse(JSON.stringify(_stocks));
+  }
+
+  /** 저장된 자원 재고 복원 */
+  function loadState(data) {
+    if (!data) return;
+    Object.keys(data).forEach(k => { _stocks[k] = { ...data[k] }; });
+  }
+
+  return { calcProvinceOutput, calcFactionResources, onMonthTick, getStock, getStocks, RESOURCE_YIELD, BUILDING_YIELD, saveState, loadState };
 })();
 
 
@@ -5221,10 +5393,33 @@ const WarSystem = (() => {
   function getCurrentMonth() { return _currentMonth; }
   function getGoalText(g)    { return _goalText(g); }
 
+  /** 전쟁/점령/조공 상태 직렬화 */
+  function saveState() {
+    return {
+      wars: JSON.parse(JSON.stringify(_wars)),
+      occupations: JSON.parse(JSON.stringify(_occupations)),
+      tributes: JSON.parse(JSON.stringify(_tributes)),
+      currentMonth: _currentMonth,
+    };
+  }
+
+  /** 저장된 전쟁 상태 복원 */
+  function loadState(data) {
+    if (!data) return;
+    _wars.length = 0;
+    if (Array.isArray(data.wars)) data.wars.forEach(w => _wars.push(w));
+    Object.keys(_occupations).forEach(k => delete _occupations[k]);
+    if (data.occupations) Object.assign(_occupations, JSON.parse(JSON.stringify(data.occupations)));
+    _tributes.length = 0;
+    if (Array.isArray(data.tributes)) data.tributes.forEach(t => _tributes.push(t));
+    if (data.currentMonth !== undefined) _currentMonth = data.currentMonth;
+  }
+
   return {
     declareWar, tryOccupy, tryOccupyRandom, getWarScore, offerPeace, makePeace,
     checkAutopeace, onMonthTick, isAtWar, getWar, getWars, getActiveWars,
     getOccupations, getTributes, getCurrentMonth, getGoalText,
+    saveState, loadState,
   };
 })();
 
@@ -5417,12 +5612,35 @@ const DiplomacyManager = (() => {
     processRelationDrift();
   }
 
+  /** 외교 관계(동맹, 종속, 교역 협정) 직렬화 */
+  function saveState() {
+    return {
+      alliances: [..._alliances],
+      vassals: [..._vassals.entries()],
+      tradeDeals: JSON.parse(JSON.stringify(_tradeDeals)),
+      tdIdCounter: _tdIdCounter,
+    };
+  }
+
+  /** 저장된 외교 상태 복원 */
+  function loadState(data) {
+    if (!data) return;
+    _alliances.clear();
+    if (Array.isArray(data.alliances)) data.alliances.forEach(k => _alliances.add(k));
+    _vassals.clear();
+    if (Array.isArray(data.vassals)) data.vassals.forEach(([v, l]) => _vassals.set(v, l));
+    _tradeDeals.length = 0;
+    if (Array.isArray(data.tradeDeals)) data.tradeDeals.forEach(d => _tradeDeals.push({ ...d }));
+    if (data.tdIdCounter !== undefined) _tdIdCounter = data.tdIdCounter;
+  }
+
   return {
     proposeAlliance, breakAlliance, isAlly, getAlliances,
     makeVassal, releaseVassal, getLiege, getVassals, isVassal,
     proposeTradeDeal, cancelTradeDeal, getTradeDeals,
     onMonthTick,
     getAllFactions: () => [...ALL_FACTIONS],
+    saveState, loadState,
   };
 })();
 
@@ -5567,10 +5785,24 @@ const TradeRouteManager = (() => {
     return internal + routeIncome;
   }
 
+  /** 교역로 상태 직렬화 */
+  function saveState() {
+    return { routes: JSON.parse(JSON.stringify(_routes)), idCounter: _idCounter };
+  }
+
+  /** 저장된 교역로 상태 복원 */
+  function loadState(data) {
+    if (!data) return;
+    _routes.length = 0;
+    if (Array.isArray(data.routes)) data.routes.forEach(r => _routes.push({ ...r }));
+    if (data.idCounter !== undefined) _idCounter = data.idCounter;
+  }
+
   return {
     createRoute, removeRoute, onMonthTick,
     getRoutes, getFactionRoutes, calcInternalTradeIncome, calcMonthlyIncome,
     ROUTE_COST, BASE_TRADE_INCOME,
+    saveState, loadState,
   };
 })();
 
@@ -5726,17 +5958,263 @@ const TechManager = (() => {
     _ensureFaction('고려');
   }
 
+  /** 연구 상태 직렬화 */
+  function saveState() {
+    const researched = {};
+    Object.keys(_researched).forEach(k => { researched[k] = [..._researched[k]]; });
+    return {
+      researched,
+      inProgress: JSON.parse(JSON.stringify(_inProgress)),
+      bonuses: JSON.parse(JSON.stringify(_bonuses)),
+    };
+  }
+
+  /** 저장된 연구 상태 복원 */
+  function loadState(data) {
+    if (!data) return;
+    if (data.researched) {
+      Object.keys(_researched).forEach(k => delete _researched[k]);
+      Object.keys(data.researched).forEach(k => {
+        _researched[k] = new Set(data.researched[k]);
+      });
+    }
+    if (data.inProgress) {
+      Object.keys(_inProgress).forEach(k => delete _inProgress[k]);
+      Object.assign(_inProgress, JSON.parse(JSON.stringify(data.inProgress)));
+    }
+    if (data.bonuses) {
+      Object.keys(_bonuses).forEach(k => delete _bonuses[k]);
+      Object.assign(_bonuses, JSON.parse(JSON.stringify(data.bonuses)));
+    }
+  }
+
   return {
     init, getAllTechs, isResearched, canResearch, startResearch,
     onMonthTick, getInProgress, getResearched, getBonuses,
     getTechCount, getTotalTechCount,
+    saveState, loadState,
   };
+})();
+
+/* ════════════════════════════════════════════════════════
+   M16 — SAVE/LOAD MANAGER
+   JSON 직렬화, localStorage 슬롯 관리, 자동저장, UI 모달
+════════════════════════════════════════════════════════ */
+const SaveLoadManager = (() => {
+  'use strict';
+
+  const SAVE_KEY_PREFIX = 'daejeonryak_save_';
+  const META_KEY_PREFIX = 'daejeonryak_meta_';
+  const GAME_VERSION    = '1.0';
+  const AUTO_SAVE_SLOT  = 'slot_auto';
+  const AUTO_SAVE_EVERY = 6; // months
+  const SLOTS = [
+    { id: 'slot_auto', label: '자동저장', autoOnly: true },
+    { id: 'slot_0',    label: '슬롯 1',  autoOnly: false },
+    { id: 'slot_1',    label: '슬롯 2',  autoOnly: false },
+    { id: 'slot_2',    label: '슬롯 3',  autoOnly: false },
+  ];
+
+  let _autoSaveCounter = 0;
+
+  // ── 직렬화 ──
+
+  /** @returns {Object} 전체 게임 상태 JSON */
+  function _collectState(slotName) {
+    const s = GameCore.getState();
+    const data = {
+      meta: {
+        savedAt: new Date().toISOString(),
+        version: GAME_VERSION,
+        slotName: slotName || '',
+        gameDate: `${s.year}년 ${s.month}월 ${s.day}일`,
+      },
+      gameCore:       GameCore.saveState(),
+      factionManager: FactionManager.saveState(),
+      provinceManager: ProvinceManager.saveState(),
+      characterManager: CharacterManager.saveState(),
+    };
+    if (typeof MilitaryManager  !== 'undefined') data.militaryManager  = MilitaryManager.saveState();
+    if (typeof EconomyEngine    !== 'undefined') data.economyEngine    = EconomyEngine.saveState();
+    if (typeof DiplomacyManager !== 'undefined') data.diplomacyManager = DiplomacyManager.saveState();
+    if (typeof WarSystem        !== 'undefined') data.warSystem        = WarSystem.saveState();
+    if (typeof TradeRouteManager !== 'undefined') data.tradeRouteManager = TradeRouteManager.saveState();
+    if (typeof TechManager      !== 'undefined') data.techManager      = TechManager.saveState();
+    return data;
+  }
+
+  /** 각 모듈에 저장된 상태를 복원 */
+  function _applyState(data) {
+    if (!data) return;
+    if (data.gameCore)        GameCore.loadState(data.gameCore);
+    if (data.factionManager)  FactionManager.loadState(data.factionManager);
+    if (data.provinceManager) ProvinceManager.loadState(data.provinceManager);
+    if (data.characterManager) CharacterManager.loadState(data.characterManager);
+    if (data.militaryManager  && typeof MilitaryManager  !== 'undefined') MilitaryManager.loadState(data.militaryManager);
+    if (data.economyEngine    && typeof EconomyEngine    !== 'undefined') EconomyEngine.loadState(data.economyEngine);
+    if (data.diplomacyManager && typeof DiplomacyManager !== 'undefined') DiplomacyManager.loadState(data.diplomacyManager);
+    if (data.warSystem        && typeof WarSystem        !== 'undefined') WarSystem.loadState(data.warSystem);
+    if (data.tradeRouteManager && typeof TradeRouteManager !== 'undefined') TradeRouteManager.loadState(data.tradeRouteManager);
+    if (data.techManager      && typeof TechManager      !== 'undefined') TechManager.loadState(data.techManager);
+  }
+
+  // ── 저장/불러오기 ──
+
+  /**
+   * 슬롯에 저장
+   * @param {string} slotId - 'slot_0' | 'slot_1' | 'slot_2' | 'slot_auto'
+   * @param {string} [slotName] - 슬롯 이름 (선택)
+   */
+  function save(slotId, slotName) {
+    try {
+      const state = _collectState(slotName || _slotLabel(slotId));
+      const json  = JSON.stringify(state);
+      localStorage.setItem(SAVE_KEY_PREFIX + slotId, json);
+      localStorage.setItem(META_KEY_PREFIX + slotId, JSON.stringify(state.meta));
+      return true;
+    } catch (e) {
+      const msg = e && e.name === 'QuotaExceededError'
+        ? '저장 실패: 용량 초과' : '저장 실패: ' + (e && e.message || '알 수 없는 오류');
+      Notifications.push(msg, 'alert');
+      return false;
+    }
+  }
+
+  /**
+   * 슬롯에서 불러오기
+   * @param {string} slotId
+   */
+  function load(slotId) {
+    const json = localStorage.getItem(SAVE_KEY_PREFIX + slotId);
+    if (!json) { Notifications.push('불러오기 실패: 저장 데이터 없음', 'warn'); return false; }
+    if (!confirm('현재 게임을 덮어씁니다. 계속하시겠습니까?')) return false;
+    try {
+      const data = JSON.parse(json);
+      _applyState(data);
+      if (typeof MapRenderer !== 'undefined' && MapRenderer.markDirty) MapRenderer.markDirty();
+      if (typeof UI          !== 'undefined' && UI.refresh)           UI.refresh();
+      const label = (data.meta && data.meta.slotName) || _slotLabel(slotId);
+      Notifications.push(`불러오기 완료: ${label}`, 'good');
+      closeModal();
+      return true;
+    } catch (e) {
+      Notifications.push('불러오기 실패: 데이터 손상', 'alert');
+      return false;
+    }
+  }
+
+  /** 슬롯 메타데이터 반환 (없으면 null) */
+  function getMeta(slotId) {
+    const raw = localStorage.getItem(META_KEY_PREFIX + slotId);
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch { return null; }
+  }
+
+  function _slotLabel(slotId) {
+    const s = SLOTS.find(s => s.id === slotId);
+    return s ? s.label : slotId;
+  }
+
+  // ── 자동저장 ──
+
+  /** 자동저장 훅 (매 newMonth 호출) */
+  function _onMonthTick() {
+    _autoSaveCounter++;
+    if (_autoSaveCounter >= AUTO_SAVE_EVERY) {
+      _autoSaveCounter = 0;
+      if (save(AUTO_SAVE_SLOT, '자동저장')) {
+        Notifications.push('자동저장 완료', 'good');
+      }
+    }
+  }
+
+  // ── UI ──
+
+  /** 모달 열기 */
+  function openModal() {
+    _renderModal();
+    document.getElementById('saveload-overlay').classList.add('open');
+  }
+
+  /** 모달 닫기 */
+  function closeModal() {
+    const overlay = document.getElementById('saveload-overlay');
+    if (overlay) overlay.classList.remove('open');
+  }
+
+  function _renderModal() {
+    const container = document.getElementById('saveload-slots');
+    if (!container) return;
+    container.innerHTML = '';
+    SLOTS.forEach(slot => {
+      const meta = getMeta(slot.id);
+      const card = document.createElement('div');
+      card.className = 'sl-slot';
+
+      const nameEl = document.createElement('div');
+      nameEl.className = 'sl-slot-name';
+      nameEl.textContent = slot.label;
+
+      const infoEl = document.createElement('div');
+      infoEl.className = 'sl-slot-info';
+      if (meta) {
+        infoEl.innerHTML = `<div class="sl-slot-date">${meta.gameDate || '?'}</div>`
+          + `<div class="sl-slot-time">${_formatTime(meta.savedAt)}</div>`;
+      } else {
+        infoEl.innerHTML = '<div class="sl-slot-empty">— 비어 있음 —</div>';
+      }
+
+      const btnsEl = document.createElement('div');
+      btnsEl.className = 'sl-slot-btns';
+
+      if (!slot.autoOnly) {
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'sl-btn sl-btn-save';
+        saveBtn.textContent = '저장';
+        saveBtn.onclick = () => { if (save(slot.id, slot.label)) { Notifications.push(`저장 완료: ${slot.label}`, 'good'); _renderModal(); } };
+        btnsEl.appendChild(saveBtn);
+      }
+
+      const loadBtn = document.createElement('button');
+      loadBtn.className = 'sl-btn sl-btn-load';
+      loadBtn.textContent = '불러오기';
+      loadBtn.disabled = !meta;
+      loadBtn.onclick = () => load(slot.id);
+      btnsEl.appendChild(loadBtn);
+
+      card.appendChild(nameEl);
+      card.appendChild(infoEl);
+      card.appendChild(btnsEl);
+      container.appendChild(card);
+    });
+  }
+
+  function _formatTime(isoStr) {
+    if (!isoStr) return '';
+    try {
+      const d = new Date(isoStr);
+      const pad = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} `
+           + `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    } catch { return isoStr; }
+  }
+
+  /** 초기화: 자동저장 훅 등록, ESC 키 닫기 */
+  function init() {
+    GameCore.on('newMonth', _onMonthTick);
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closeModal();
+    });
+  }
+
+  return { init, save, load, getMeta, openModal, closeModal };
 })();
 
 window.addEventListener('load', () => {
   MapRenderer.init();
   Notifications.init();
   TechManager.init();
+  SaveLoadManager.init();
   GameCore.start();
 
   // 타임바
@@ -5855,5 +6333,16 @@ window.addEventListener('load', () => {
     <div id="event-choices"></div>
   </div>
 </div>
+<!-- ── M16 세이브/로드 모달 ── -->
+<div id="saveload-overlay" role="dialog" aria-modal="true" aria-labelledby="saveload-title">
+  <div id="saveload-modal">
+    <div id="saveload-header">
+      <h2 id="saveload-title">💾 세이브 / 로드</h2>
+      <button id="saveload-close" onclick="SaveLoadManager.closeModal()" title="닫기">✕</button>
+    </div>
+    <div id="saveload-slots"></div>
+  </div>
+</div>
+
 </body>
 </html>
