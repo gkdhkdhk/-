@@ -1087,7 +1087,7 @@
       <span aria-label="철"><span aria-hidden="true">⚙</span> <span id="res-iron">0</span></span>
       <span aria-label="목재"><span aria-hidden="true">🪵</span> <span id="res-wood">0</span></span>
       <span id="trade-income-display" style="font-size:11px;color:#f5a623;margin-left:8px;cursor:pointer" onclick="ActionPanels.openTrade()" title="교역로 관리">🛤 +0/월</span>
-      <div id="tech-focus-widget" onclick="ActionPanels.openTech()" title="기술 연구 클릭으로 열기">
+      <div id="tech-focus-widget" onclick="ActionPanels.openTech()" onkeydown="if(event.key==='Enter'||event.key===' ')ActionPanels.openTech()" tabindex="0" title="기술 연구 클릭으로 열기" role="button">
         <span>🔬</span>
         <span class="tfw-name" id="tfw-name">연구 선택...</span>
       </div>
@@ -6856,7 +6856,6 @@ const MilitaryUI = (() => {
       return;
     }
     FactionManager.addGold(PLAYER_FACTION, -200);
-    const base = MilitaryManager.getUnitTypes();
     const newId = MilitaryManager.createDivision(PLAYER_FACTION, provinceId, {
       infantry: 2000, cavalry: 500, archers: 500, siege: 0,
     });
