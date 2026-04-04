@@ -1087,10 +1087,10 @@
       <span aria-label="철"><span aria-hidden="true">⚙</span> <span id="res-iron">0</span></span>
       <span aria-label="목재"><span aria-hidden="true">🪵</span> <span id="res-wood">0</span></span>
       <span id="trade-income-display" style="font-size:11px;color:#f5a623;margin-left:8px;cursor:pointer" onclick="ActionPanels.openTrade()" title="교역로 관리">🛤 +0/월</span>
-      <div id="tech-focus-widget" onclick="ActionPanels.openTech()" onkeydown="if(event.key==='Enter'||event.key===' ')ActionPanels.openTech()" tabindex="0" title="기술 연구 클릭으로 열기" role="button">
+      <button id="tech-focus-widget" onclick="ActionPanels.openTech()" title="기술 연구 클릭으로 열기">
         <span>🔬</span>
         <span class="tfw-name" id="tfw-name">연구 선택...</span>
-      </div>
+      </button>
       <button id="military-mode-btn" class="ctrl-btn" onclick="MilitaryUI.toggleMode()" title="군사 모드 ON/OFF" style="font-size:12px;padding:4px 8px">⚔ 군사</button>
       <button id="ai-toggle-btn" class="ctrl-btn" title="AI 자동 행동 ON/OFF"
         onclick="const on=AIManager.toggle();this.textContent='🤖 AI '+(on?'ON':'OFF');this.style.opacity=on?'1':'0.5';"
