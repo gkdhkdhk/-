@@ -1051,6 +1051,78 @@
   .tech-start-btn:hover { background: #1a3a70; color: #fff; }
   .tech-start-btn.switch { border-color: #5a8a1a; background: #1a2a0f; color: #9acc60; }
   .tech-start-btn.switch:hover { background: #2a3a1a; }
+
+  /* ── Tech Tree Full-Screen Modal ── */
+  #tech-tree-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 2000;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #tech-tree-modal {
+    background: #1a1408; border: 1px solid #3a2a10; border-radius: 10px;
+    width: 90vw; max-width: 1100px; height: 80vh; max-height: 700px;
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 0 40px rgba(0,0,0,0.8);
+  }
+  #tech-tree-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 20px; border-bottom: 1px solid #3a2a10;
+    background: #0f0c04; font-size: 16px; font-weight: bold; color: #d4b060;
+  }
+  #tech-tree-close {
+    background: transparent; border: 1px solid #5a3a10; color: #a08040;
+    border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 14px;
+  }
+  #tech-tree-close:hover { background: #3a2010; color: #d0a050; }
+  #tech-tree-content {
+    flex: 1; overflow-x: auto; overflow-y: auto; padding: 16px 20px;
+  }
+  .tt-row {
+    display: flex; align-items: center; margin-bottom: 16px; min-height: 100px;
+  }
+  .tt-cat-label {
+    writing-mode: horizontal-tb; width: 70px; min-width: 70px;
+    font-size: 11px; font-weight: bold; color: #a08040;
+    text-align: center; padding: 4px; background: rgba(0,0,0,0.3);
+    border-radius: 4px; margin-right: 12px; flex-shrink: 0;
+  }
+  .tt-cards { display: flex; align-items: center; gap: 0; }
+  .tt-card {
+    width: 155px; min-width: 155px; padding: 8px 10px; border-radius: 6px;
+    border: 1px solid #333; cursor: default; position: relative;
+    background: #1e1e1e; transition: all 0.15s;
+  }
+  .tt-card.locked { background: #1a1a1a; border-color: #2a2a2a; }
+  .tt-card.available { background: #0f2010; border-color: #3a7a3a; cursor: pointer; }
+  .tt-card.available:hover { background: #1a3020; border-color: #5aaa5a; }
+  .tt-card.researching { background: #0a1a30; border-color: #2a6aaa; cursor: pointer; }
+  .tt-card.done { background: #0a2510; border-color: #2a7a3a; }
+  .tt-card-icon { font-size: 16px; margin-bottom: 4px; }
+  .tt-card-name { font-size: 12px; font-weight: bold; color: #ccc; margin-bottom: 2px; }
+  .tt-card.locked .tt-card-name { color: #555; }
+  .tt-card.done .tt-card-name { color: #7acc70; }
+  .tt-card.researching .tt-card-name { color: #5abaff; }
+  .tt-card.available .tt-card-name { color: #9acc60; }
+  .tt-card-cost { font-size: 10px; color: #7a6a3a; margin-bottom: 3px; }
+  .tt-card-desc { font-size: 9px; color: #5a5a4a; line-height: 1.3; }
+  .tt-card.locked .tt-card-desc { color: #333; }
+  .tt-card-progress {
+    height: 4px; background: #0a1520; border-radius: 2px; margin-top: 6px; overflow: hidden;
+  }
+  .tt-card-progress-fill { height: 100%; background: #4a9adf; transition: width 0.3s; }
+  .tt-card-check {
+    position: absolute; top: 6px; right: 8px; color: #4caf50; font-size: 14px; font-weight: bold;
+  }
+  .tt-card-months { font-size: 9px; color: #4a8adf; margin-top: 2px; }
+  .tt-arrow { color: #5a5a3a; font-size: 18px; margin: 0 4px; flex-shrink: 0; align-self: center; }
+  #tech-tree-legend {
+    display: flex; gap: 16px; padding: 10px 20px; border-top: 1px solid #2a1a08;
+    background: #0f0c04; font-size: 11px;
+  }
+  .ttl-item { display: flex; align-items: center; gap: 6px; }
+  .ttl-item.locked { color: #555; }
+  .ttl-item.available { color: #7acc60; }
+  .ttl-item.researching { color: #5abaff; }
+  .ttl-item.done { color: #4caf50; }
 </style>
 </head>
 <body>
@@ -1623,6 +1695,9 @@ const MapRenderer = (() => {
   const pickCanvas = document.createElement('canvas');
   const pickCtx = pickCanvas.getContext('2d', { willReadFrequently: true });
 
+  const MAP_WIDTH  = 920;
+  const MAP_HEIGHT = 800;
+
   let currentMode = 'political';
   let selectedId = null;
   let hoveredId = null;
@@ -1633,6 +1708,15 @@ const MapRenderer = (() => {
   let offsetX = 30;
   let offsetY = 20;
 
+  function _calcMinScale() {
+    return Math.max(canvas.width / MAP_WIDTH, canvas.height / MAP_HEIGHT);
+  }
+
+  function _clampOffset() {
+    offsetX = Math.max(canvas.width  - MAP_WIDTH  * scale, Math.min(0, offsetX));
+    offsetY = Math.max(canvas.height - MAP_HEIGHT * scale, Math.min(0, offsetY));
+  }
+
   // 인구 최대값 (색상 스케일용)
   const maxPop = Math.max(...ProvinceManager.getAll().map(p => p.population));
 
@@ -1642,6 +1726,13 @@ const MapRenderer = (() => {
     canvas.height = wrap.clientHeight;
     pickCanvas.width = canvas.width;
     pickCanvas.height = canvas.height;
+    const minScale = _calcMinScale();
+    if (scale < minScale) {
+      scale = minScale;
+      offsetX = 0;
+      offsetY = 0;
+    }
+    _clampOffset();
     needsRedraw = true;
     buildPickBuffer();
   }
@@ -1803,38 +1894,42 @@ const MapRenderer = (() => {
 
     // 5.5단계: 사단 배지 + 군사 모드 하이라이트
     if (typeof MilitaryManager !== 'undefined') {
-      const selDivId = typeof MilitaryUI !== 'undefined' ? MilitaryUI.getSelectedDivId() : null;
-      const selDiv = selDivId ? MilitaryManager.getDivisionById(selDivId) : null;
-      const selProvId = selDiv ? selDiv.locationId : null;
+      const selDivIds = typeof MilitaryUI !== 'undefined' && MilitaryUI.getSelectedDivIds ? MilitaryUI.getSelectedDivIds() : [];
+      const selProvIds = new Set();
+      selDivIds.forEach(id => {
+        const d = MilitaryManager.getDivisionById(id);
+        if (d) selProvIds.add(d.locationId);
+      });
 
       // 선택된 사단의 프로빈스 노란 테두리
-      if (selProvId) {
-        const selProv = ProvinceManager.getById(selProvId);
+      selProvIds.forEach(provId => {
+        const selProv = ProvinceManager.getById(provId);
         if (selProv) {
           ctx.save();
           ctx.setLineDash([4, 3]);
           ctx.lineWidth = 3;
-          ctx.strokeStyle = '#f5a623';
           drawPoly(ctx, selProv.poly, null, '#f5a623', 3);
           ctx.setLineDash([]);
           ctx.restore();
         }
-        // 인접 가능 지역 힌트 (연두색 테두리)
-        if (typeof MilitaryUI !== 'undefined' && MilitaryUI.isActive()) {
-          const adj = MilitaryManager.getAdjacency();
-          (adj[selProvId] || []).forEach(adjId => {
-            const adjProv = ProvinceManager.getById(adjId);
-            if (adjProv) {
-              ctx.save();
-              ctx.globalAlpha = 0.5;
-              ctx.setLineDash([3, 4]);
-              drawPoly(ctx, adjProv.poly, null, '#7acc50', 2);
-              ctx.setLineDash([]);
-              ctx.globalAlpha = 1;
-              ctx.restore();
-            }
-          });
-        }
+      });
+
+      // 인접 가능 지역 힌트 (첫 번째 선택 사단 기준)
+      const firstSelDiv = selDivIds.length > 0 ? MilitaryManager.getDivisionById(selDivIds[0]) : null;
+      if (firstSelDiv && typeof MilitaryUI !== 'undefined' && MilitaryUI.isActive()) {
+        const adj = MilitaryManager.getAdjacency();
+        (adj[firstSelDiv.locationId] || []).forEach(adjId => {
+          const adjProv = ProvinceManager.getById(adjId);
+          if (adjProv) {
+            ctx.save();
+            ctx.globalAlpha = 0.5;
+            ctx.setLineDash([3, 4]);
+            drawPoly(ctx, adjProv.poly, null, '#7acc50', 2);
+            ctx.setLineDash([]);
+            ctx.globalAlpha = 1;
+            ctx.restore();
+          }
+        });
       }
 
       provinces.forEach(p => {
@@ -1941,6 +2036,22 @@ const MapRenderer = (() => {
 
     // 배틀 오버레이 카드 위치 업데이트
     if (typeof BattleOverlay !== 'undefined') BattleOverlay.reposition();
+
+    // 고무밴드 드래그 선택 사각형
+    if (typeof MilitaryUI !== 'undefined' && MilitaryUI.isActive()) {
+      const dragRect = MilitaryUI.getDragRect ? MilitaryUI.getDragRect() : null;
+      if (dragRect) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(100,160,255,0.9)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.fillStyle = 'rgba(50,100,200,0.1)';
+        ctx.fillRect(dragRect.x, dragRect.y, dragRect.w, dragRect.h);
+        ctx.strokeRect(dragRect.x, dragRect.y, dragRect.w, dragRect.h);
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+    }
   }
 
   function getModeLabel() {
@@ -2022,11 +2133,13 @@ const MapRenderer = (() => {
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const newScale = Math.max(0.5, Math.min(3.0, scale * delta));
+    const minScale = _calcMinScale();
+    const newScale = Math.max(minScale, Math.min(3.0, scale * delta));
     // 마우스 위치 기준 줌
     offsetX = mx - (mx - offsetX) * (newScale / scale);
     offsetY = my - (my - offsetY) * (newScale / scale);
     scale = newScale;
+    _clampOffset();
     needsRedraw = true;
     buildPickBuffer();
   }, { passive: false });
@@ -2040,12 +2153,20 @@ const MapRenderer = (() => {
     if (dragging) {
       offsetX = e.clientX - dragStartX;
       offsetY = e.clientY - dragStartY;
+      _clampOffset();
       needsRedraw = true;
       buildPickBuffer();
     }
   });
   canvas.addEventListener('mouseup', () => { dragging = false; });
-  canvas.addEventListener('contextmenu', e => e.preventDefault());
+  canvas.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    if (typeof MilitaryUI !== 'undefined' && MilitaryUI.isActive()) {
+      const rect = canvas.getBoundingClientRect();
+      const p = provinceAtPixel(e.clientX - rect.left, e.clientY - rect.top);
+      if (p) MilitaryUI.handleRightClick(p);
+    }
+  });
 
   function setMode(mode) {
     currentMode = mode;
@@ -5288,113 +5409,12 @@ const ActionPanels = (() => {
   let _techTabActive = 'military';
 
   function openTech() {
-    _open('🔬', '기술 연구', () => {
-      const factionId = '고려';
-      const ip      = TechManager.getInProgress(factionId);
-      const st      = FactionManager.getFactionState(factionId);
-      const gold    = st ? Math.floor(st.gold || 0) : 0;
-      const bonuses = TechManager.getBonuses(factionId);
-      const doneCount  = TechManager.getTechCount(factionId);
-      const totalCount = TechManager.getTotalTechCount();
-      const allTechTree = TechManager.getAllTechs();
-
-      // 현황 요약
-      let html = `<div class="ap-section">
-        <div class="ap-section-title">연구 현황</div>
-        <div class="ap-row"><span class="ap-label">완료 기술</span><span class="ap-value positive">${doneCount} / ${totalCount}</span></div>
-        <div class="ap-row"><span class="ap-label">보유 금화</span><span class="ap-value">${gold}💰</span></div>
-        <div class="ap-row"><span class="ap-label">월 수입 보너스</span><span class="ap-value positive">+${bonuses.incomeBonus}💰/월</span></div>
-      </div>`;
-
-      // 카테고리 탭
-      html += `<div class="tech-tab-row">`;
-      for (const [catKey, cat] of Object.entries(allTechTree)) {
-        const active = catKey === _techTabActive ? ' active' : '';
-        html += `<button class="tech-tab${active}" onclick="ActionPanels._setTechTab('${catKey}')">${cat.label}</button>`;
-      }
-      html += `</div>`;
-
-      // 선택된 카테고리의 기술 카드
-      const cat = allTechTree[_techTabActive];
-      if (cat) {
-        for (const tech of cat.techs) {
-          const done       = TechManager.isResearched(factionId, tech.id);
-          const prereqDone = !tech.prereq || TechManager.isResearched(factionId, tech.prereq);
-          const isCurrentFocus = ip && ip.techId === tech.id;
-          const canAfford  = gold >= tech.cost;
-
-          // 카드 클래스 결정
-          let cardClass = 'tech-card';
-          if (done) cardClass += ' done';
-          else if (isCurrentFocus) cardClass += ' active-research';
-          else if (!prereqDone) cardClass += ' locked';
-
-          // 상태 표시
-          let statusHtml;
-          if (done) {
-            statusHtml = `<span class="tech-card-status" style="color:#4caf50">✓ 완료</span>`;
-          } else if (isCurrentFocus) {
-            const pct = Math.round(ip.progress / ip.required * 100);
-            statusHtml = `<span class="tech-card-status" style="color:#5abaff">🔬 ${ip.progress}/${ip.required}개월</span>`;
-          } else if (!prereqDone) {
-            const prereqTech = Object.values(allTechTree).flatMap(c => c.techs).find(t => t.id === tech.prereq);
-            statusHtml = `<span class="tech-card-status" style="color:#445">🔒 ${prereqTech ? prereqTech.name : ''} 필요</span>`;
-          } else if (!canAfford) {
-            statusHtml = `<span class="tech-card-status" style="color:#e94560">💰${tech.cost} 필요</span>`;
-          } else {
-            statusHtml = `<span class="tech-card-status" style="color:#c0d8f0">💰${tech.cost}</span>`;
-          }
-
-          // 효과 요약
-          const effectParts = [];
-          if (tech.effect.military)    effectParts.push(`+${tech.effect.military} 전투력`);
-          if (tech.effect.incomeBonus) effectParts.push(`+${tech.effect.incomeBonus}💰/월`);
-          if (tech.effect.stability)   effectParts.push(`+${tech.effect.stability} 안정도`);
-          if (tech.effect.prestige)    effectParts.push(`+${tech.effect.prestige} 위신`);
-          if (tech.effect.goldBonus)   effectParts.push(`+${tech.effect.goldBonus}💰 즉시`);
-          if (tech.effect.siegeBonus)  effectParts.push(`공성 강화`);
-          if (tech.effect.tradeBonus)  effectParts.push(`교역 보너스`);
-          if (tech.effect.provinceDevBonus) effectParts.push(`프로빈스 발전도 보너스`);
-
-          html += `<div class="${cardClass}">
-            <div class="tech-card-header">
-              <span class="tech-card-name">${tech.name}</span>
-              ${statusHtml}
-            </div>
-            <div class="tech-card-desc">${tech.desc}</div>
-            ${effectParts.length ? `<div class="tech-card-effect">${effectParts.join(' · ')}</div>` : ''}`;
-
-          // 진행바 (현재 포커스 기술)
-          if (isCurrentFocus) {
-            const pct = Math.round(ip.progress / ip.required * 100);
-            html += `<div class="tech-card-progress"><div class="tech-card-progress-fill" style="width:${pct}%"></div></div>`;
-          }
-
-          // 버튼
-          if (!done && prereqDone && canAfford) {
-            if (isCurrentFocus) {
-              html += `<div style="font-size:10px;color:#5abaff;text-align:center;padding-top:4px">현재 연구 중</div>`;
-            } else if (ip) {
-              html += `<button class="tech-start-btn switch" onclick="TechManager.startResearch('${factionId}','${tech.id}');ActionPanels.openTech()">
-                🔄 연구 전환 <span style="color:#8a9a70">💰${tech.cost}</span>
-              </button>`;
-            } else {
-              html += `<button class="tech-start-btn" onclick="TechManager.startResearch('${factionId}','${tech.id}');ActionPanels.openTech()">
-                🔬 연구 시작 <span style="color:#7090a0">💰${tech.cost}</span>
-              </button>`;
-            }
-          }
-
-          html += `</div>`;
-        }
-      }
-      return html;
-    });
+    ActionPanels.close();
+    TechTreeModal.open();
   }
 
   function _setTechTab(catKey) {
-    _techTabActive = catKey;
-    openTech();
+    TechTreeModal.open();
   }
 
   return { openEconomy, openCharacters, openStability, openDiplomacy, openEvents, openProvinceList, openTrade, openTech, _setTechTab, close, refresh, _stabilityBoost, _sendGift, _assignHeir, _openMarriage };
@@ -6240,6 +6260,7 @@ const TechManager = (() => {
     } else {
       nameEl.textContent = '연구 선택...';
     }
+    if (typeof TechTreeModal !== 'undefined') TechTreeModal.refresh();
   }
 
   function init() {
@@ -6283,6 +6304,104 @@ const TechManager = (() => {
     updateFocusWidget: _updateTechFocusWidget,
     saveState, loadState,
   };
+})();
+
+/* ════════════════════════════════════════════════════════
+   TechTreeModal — Civ5 스타일 기술 트리 전체화면 모달
+════════════════════════════════════════════════════════ */
+const TechTreeModal = (() => {
+  'use strict';
+
+  const CAT_ICONS = { military: '⚔', economy: '💰', admin: '📜', culture: '🎭' };
+
+  function open() {
+    _render();
+    document.getElementById('tech-tree-overlay').style.display = 'flex';
+  }
+
+  function close() {
+    document.getElementById('tech-tree-overlay').style.display = 'none';
+  }
+
+  function _render() {
+    const factionId = '고려';
+    const allTech = TechManager.getAllTechs();
+    const ip = TechManager.getInProgress(factionId);
+    const st = FactionManager.getFactionState(factionId);
+    const gold = st ? Math.floor(st.gold || 0) : 0;
+    let html = '';
+
+    for (const [catKey, cat] of Object.entries(allTech)) {
+      html += `<div class="tt-row">
+        <div class="tt-cat-label">${cat.label}</div>
+        <div class="tt-cards">`;
+
+      cat.techs.forEach((tech, idx) => {
+        const done = TechManager.isResearched(factionId, tech.id);
+        const prereqDone = !tech.prereq || TechManager.isResearched(factionId, tech.prereq);
+        const isResearching = ip && ip.techId === tech.id;
+        const canAfford = gold >= tech.cost;
+
+        let cardClass = 'tt-card';
+        if (done) cardClass += ' done';
+        else if (isResearching) cardClass += ' researching';
+        else if (!prereqDone) cardClass += ' locked';
+        else cardClass += ' available';
+
+        let clickAttr = '';
+        if (!done && prereqDone && canAfford && !isResearching) {
+          clickAttr = `onclick="TechManager.startResearch('고려','${tech.id}');TechTreeModal.refresh()" style="cursor:pointer"`;
+        } else if (!done && prereqDone && canAfford && isResearching) {
+          clickAttr = `title="현재 연구 중"`;
+        }
+
+        const icon = CAT_ICONS[catKey] || '🔬';
+        const effectParts = [];
+        if (tech.effect.military)    effectParts.push(`+${tech.effect.military} 전투력`);
+        if (tech.effect.incomeBonus) effectParts.push(`+${tech.effect.incomeBonus}💰/월`);
+        if (tech.effect.stability)   effectParts.push(`+${tech.effect.stability} 안정`);
+        if (tech.effect.prestige)    effectParts.push(`+${tech.effect.prestige} 위신`);
+        if (tech.effect.goldBonus)   effectParts.push(`+${tech.effect.goldBonus}💰`);
+
+        html += `<div class="${cardClass}" ${clickAttr}>`;
+        if (done) html += `<div class="tt-card-check">✓</div>`;
+        html += `<div class="tt-card-name">${icon} ${tech.name}</div>`;
+        if (!done) html += `<div class="tt-card-cost">💰 ${tech.cost}</div>`;
+        html += `<div class="tt-card-desc">${tech.desc}</div>`;
+        if (effectParts.length) html += `<div class="tt-card-desc" style="color:#6a8a5a;margin-top:2px">${effectParts.join(' · ')}</div>`;
+        if (isResearching) {
+          const pct = Math.round(ip.progress / ip.required * 100);
+          html += `<div class="tt-card-months">${ip.progress}/${ip.required}개월</div>`;
+          html += `<div class="tt-card-progress"><div class="tt-card-progress-fill" style="width:${pct}%"></div></div>`;
+        }
+        html += `</div>`;
+
+        if (idx < cat.techs.length - 1) {
+          html += `<div class="tt-arrow">→</div>`;
+        }
+      });
+
+      html += `</div></div>`;
+    }
+
+    document.getElementById('tech-tree-content').innerHTML = html;
+  }
+
+  function refresh() {
+    const overlay = document.getElementById('tech-tree-overlay');
+    if (overlay && overlay.style.display !== 'none') {
+      _render();
+    }
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      const overlay = document.getElementById('tech-tree-overlay');
+      if (overlay && overlay.style.display !== 'none') close();
+    }
+  });
+
+  return { open, close, refresh };
 })();
 
 /* ════════════════════════════════════════════════════════
@@ -6760,12 +6879,16 @@ const MilitaryUI = (() => {
 
   const PLAYER_FACTION = '고려';
   let _militaryMode = false;
-  let _selectedDivId = null;
+  let _selectedDivIds = [];
+  let _dragStart = null;
+  let _dragRect = null;
 
   // ── 군사 모드 토글 ──
   function toggleMode() {
     _militaryMode = !_militaryMode;
-    _selectedDivId = null;
+    _selectedDivIds = [];
+    _dragStart = null;
+    _dragRect = null;
     const btn = document.getElementById('military-mode-btn');
     if (btn) {
       btn.classList.toggle('active', _militaryMode);
@@ -6781,68 +6904,70 @@ const MilitaryUI = (() => {
   }
 
   function isActive() { return _militaryMode; }
-  function getSelectedDivId() { return _selectedDivId; }
+  function getSelectedDivIds() { return _selectedDivIds; }
+  function getSelectedDivId() { return _selectedDivIds[0] || null; }
+  function getDragRect() { return _dragRect; }
 
   // ── 캔버스 클릭 처리 (MapRenderer에서 호출) ──
   function handleProvinceClick(province) {
-    if (!_militaryMode) return false; // 일반 모드에서는 처리 안 함
-
-    if (!_selectedDivId) {
-      // 1단계: 이 프로빈스에 있는 고려 사단 목록 보여주기
-      const divsHere = MilitaryManager.getDivisionsAt(province.id)
-        .filter(d => d.factionId === PLAYER_FACTION);
-      if (divsHere.length > 0) {
-        _showMilitaryPanel(province.id);
-      } else {
-        Notifications.push(`⚔ ${province.name}에 배치된 사단이 없습니다`, '');
-        _showMilitaryPanel(province.id);
-      }
+    if (!_militaryMode) return false;
+    // Single click: select all player divisions at this province
+    const divsHere = MilitaryManager.getDivisionsAt(province.id)
+      .filter(d => d.factionId === PLAYER_FACTION);
+    if (divsHere.length > 0) {
+      _selectedDivIds = divsHere.map(d => d.id);
+      Notifications.push(`✔ ${province.name}: ${divsHere.length}개 사단 선택 — 우클릭으로 이동`, '');
     } else {
-      // 2단계: 이동 명령
-      const div = MilitaryManager.getDivisionById(_selectedDivId);
-      if (!div) { _selectedDivId = null; MapRenderer.markDirty(); return true; }
-
-      if (div.locationId === province.id) {
-        // 같은 프로빈스 클릭 → 선택 해제
-        _selectedDivId = null;
-        _showMilitaryPanel(province.id);
-        MapRenderer.markDirty();
-        return true;
-      }
-
-      const adj = MilitaryManager.getAdjacency();
-      const isAdj = (adj[div.locationId] || []).includes(province.id);
-      if (!isAdj) {
-        Notifications.push(`⚠ 인접하지 않은 지역입니다`, 'warn');
-        return true;
-      }
-
-      // 이동 명령 실행
-      const ok = MilitaryManager.moveDivision(_selectedDivId, province.id);
-      if (ok) {
-        const prov = ProvinceManager.getById(province.id);
-        const isEnemy = prov && prov.faction !== PLAYER_FACTION && prov.faction !== '미지';
-        Notifications.push(
-          isEnemy
-            ? `⚔ ${div.id}사단 → ${province.name} 공격 이동`
-            : `🏃 ${div.id}사단 → ${province.name} 이동 명령`,
-          isEnemy ? 'warn' : ''
-        );
-        _selectedDivId = null;
-        _showMilitaryPanel();
-        MapRenderer.markDirty();
-      }
+      Notifications.push(`⚔ ${province.name}에 배치된 사단이 없습니다`, '');
+      _selectedDivIds = [];
     }
-    return true; // 군사 모드에서 클릭 이벤트 소비
+    _showMilitaryPanel(province.id);
+    MapRenderer.markDirty();
+    return true;
+  }
+
+  // ── 우클릭 이동 명령 ──
+  function handleRightClick(province) {
+    if (!_militaryMode) return false;
+    if (_selectedDivIds.length === 0) return false;
+    const adj = MilitaryManager.getAdjacency();
+    let moved = 0, notAdj = 0;
+    _selectedDivIds.forEach(divId => {
+      const div = MilitaryManager.getDivisionById(divId);
+      if (!div) return;
+      const isAdj = (adj[div.locationId] || []).includes(province.id);
+      if (!isAdj) { notAdj++; return; }
+      if (MilitaryManager.moveDivision(divId, province.id)) moved++;
+    });
+    if (notAdj > 0) Notifications.push(`⚠ ${notAdj}개 사단: 인접하지 않은 지역`, 'warn');
+    if (moved > 0) {
+      const prov = ProvinceManager.getById(province.id);
+      const isEnemy = prov && prov.faction !== PLAYER_FACTION && prov.faction !== '미지';
+      Notifications.push(
+        isEnemy ? `⚔ ${moved}개 사단 → ${province.name} 공격` : `🏃 ${moved}개 사단 → ${province.name} 이동`,
+        isEnemy ? 'warn' : ''
+      );
+    }
+    _selectedDivIds = [];
+    _showMilitaryPanel();
+    MapRenderer.markDirty();
+    return true;
   }
 
   // ── 사단 선택 ──
   function selectDivision(divId) {
-    _selectedDivId = divId;
-    const div = MilitaryManager.getDivisionById(divId);
-    if (div) {
-      const prov = ProvinceManager.getById(div.locationId);
-      Notifications.push(`✔ ${divId}사단 선택됨${prov ? ' — ' + prov.name + ' 주둔' : ''} | 이동할 지역 클릭`, '');
+    const idx = _selectedDivIds.indexOf(divId);
+    if (idx >= 0) {
+      _selectedDivIds.splice(idx, 1);
+    } else {
+      _selectedDivIds.push(divId);
+    }
+    if (_selectedDivIds.includes(divId)) {
+      const div = MilitaryManager.getDivisionById(divId);
+      if (div) {
+        const prov = ProvinceManager.getById(div.locationId);
+        Notifications.push(`✔ ${divId}사단 선택 — 우클릭으로 이동`, '');
+      }
     }
     _showMilitaryPanel();
     MapRenderer.markDirty();
@@ -6867,11 +6992,11 @@ const MilitaryUI = (() => {
 
   // ── 해산 ──
   function disbandSelected() {
-    if (!_selectedDivId) return;
-    const divId = _selectedDivId;
-    MilitaryManager.disbandDivision(divId);
-    Notifications.push(`🗑 ${divId}사단 해산`, 'warn');
-    _selectedDivId = null;
+    if (_selectedDivIds.length === 0) return;
+    const count = _selectedDivIds.length;
+    [..._selectedDivIds].forEach(divId => MilitaryManager.disbandDivision(divId));
+    _selectedDivIds = [];
+    Notifications.push(`🗑 ${count}개 사단 해산`, 'warn');
     _showMilitaryPanel();
     MapRenderer.markDirty();
   }
@@ -6910,7 +7035,7 @@ const MilitaryUI = (() => {
     } else {
       divs.forEach(div => {
         const prov = ProvinceManager.getById(div.locationId);
-        const isSelected = div.id === _selectedDivId;
+        const isSelected = _selectedDivIds.includes(div.id);
         const total = (div.units.infantry||0) + (div.units.cavalry||0) + (div.units.archers||0) + (div.units.siege||0);
         const stateLabel = { idle:'대기', moving:'이동', fighting:'전투' };
         const stateColor = { idle:'#8090a0', moving:'#f5a623', fighting:'#e94560' };
@@ -6931,8 +7056,8 @@ const MilitaryUI = (() => {
 
     // 징병 섹션
     const selectedProv = focusProvinceId || (
-      _selectedDivId
-        ? (MilitaryManager.getDivisionById(_selectedDivId) || {}).locationId
+      _selectedDivIds.length > 0
+        ? (MilitaryManager.getDivisionById(_selectedDivIds[0]) || {}).locationId
         : null
     );
     const playerProvs = ProvinceManager.getFactionProvinces(PLAYER_FACTION);
@@ -6964,16 +7089,13 @@ const MilitaryUI = (() => {
       }
     }
 
-    if (_selectedDivId) {
-      const selDiv = MilitaryManager.getDivisionById(_selectedDivId);
-      if (selDiv) {
-        html += `<div class="info-section">
-          <h4>선택된 사단: ${_selectedDivId}사단</h4>
-          <div style="font-size:11px;color:#8090a0;margin-bottom:6px">이동할 인접 지역을 클릭하세요</div>
-          <button class="mil-btn danger" onclick="MilitaryUI.disbandSelected()">🗑 해산</button>
-          <button class="mil-btn" onclick="MilitaryUI.cancelSelection()" style="margin-top:4px">✕ 선택 취소</button>
-        </div>`;
-      }
+    if (_selectedDivIds.length > 0) {
+      html += `<div class="info-section">
+        <h4>선택된 사단: ${_selectedDivIds.length}개</h4>
+        <div style="font-size:11px;color:#8090a0;margin-bottom:6px">우클릭으로 인접 지역에 이동 명령</div>
+        <button class="mil-btn danger" onclick="MilitaryUI.disbandSelected()">🗑 해산</button>
+        <button class="mil-btn" onclick="MilitaryUI.cancelSelection()" style="margin-top:4px">✕ 선택 취소</button>
+      </div>`;
     }
 
     panel.innerHTML = html;
@@ -6985,7 +7107,8 @@ const MilitaryUI = (() => {
   }
 
   function cancelSelection() {
-    _selectedDivId = null;
+    _selectedDivIds = [];
+    _dragRect = null;
     _showMilitaryPanel();
     MapRenderer.markDirty();
   }
@@ -6993,7 +7116,7 @@ const MilitaryUI = (() => {
   // ── ESC 키 처리 ──
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && _militaryMode) {
-      if (_selectedDivId) {
+      if (_selectedDivIds.length > 0) {
         cancelSelection();
       } else {
         toggleMode();
@@ -7001,9 +7124,65 @@ const MilitaryUI = (() => {
     }
   });
 
+  // ── 고무밴드 드래그 선택 ──
+  function _selectDivisionsInRect(rect) {
+    const allDivs = MilitaryManager.getDivisionsByFaction(PLAYER_FACTION);
+    _selectedDivIds = [];
+    allDivs.forEach(div => {
+      const prov = ProvinceManager.getById(div.locationId);
+      if (!prov) return;
+      const [cx, cy] = MapRenderer.polyCenter(prov.poly);
+      if (cx >= rect.x && cx <= rect.x + rect.w && cy >= rect.y && cy <= rect.y + rect.h) {
+        _selectedDivIds.push(div.id);
+      }
+    });
+    if (_selectedDivIds.length > 0) {
+      Notifications.push(`✔ ${_selectedDivIds.length}개 사단 선택됨 — 우클릭으로 이동 명령`, '');
+    }
+  }
+
+  const _canvas = document.getElementById('gameCanvas');
+  _canvas.addEventListener('mousedown', e => {
+    if (!_militaryMode || e.button !== 0) return;
+    const rect = _canvas.getBoundingClientRect();
+    _dragStart = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    _dragRect = null;
+  });
+  _canvas.addEventListener('mousemove', e => {
+    if (!_militaryMode || !_dragStart || e.buttons !== 1) return;
+    const rect = _canvas.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+    const dx = cx - _dragStart.x;
+    const dy = cy - _dragStart.y;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+      _dragRect = {
+        x: Math.min(_dragStart.x, cx),
+        y: Math.min(_dragStart.y, cy),
+        w: Math.abs(dx),
+        h: Math.abs(dy),
+      };
+      MapRenderer.markDirty();
+    }
+  });
+  _canvas.addEventListener('mouseup', e => {
+    if (!_militaryMode || e.button !== 0) return;
+    if (_dragRect && (_dragRect.w > 8 || _dragRect.h > 8)) {
+      _selectDivisionsInRect(_dragRect);
+      _dragRect = null;
+      _dragStart = null;
+      _showMilitaryPanel();
+      MapRenderer.markDirty();
+      e.stopPropagation();
+    } else {
+      _dragRect = null;
+      _dragStart = null;
+    }
+  });
+
   return {
-    toggleMode, isActive, getSelectedDivId,
-    handleProvinceClick, selectDivision,
+    toggleMode, isActive, getSelectedDivId, getSelectedDivIds, getDragRect,
+    handleProvinceClick, handleRightClick, selectDivision,
     recruitDivision, disbandSelected, cancelSelection,
     refreshPanel: _showMilitaryPanel,
   };
@@ -7088,6 +7267,23 @@ window.addEventListener('load', () => {
 </script>
 <!-- ── Alert Tray ── -->
 <div id="alert-tray"></div>
+
+<!-- ── Tech Tree Full-Screen Modal ── -->
+<div id="tech-tree-overlay" style="display:none">
+  <div id="tech-tree-modal">
+    <div id="tech-tree-header">
+      <span>🔬 기술 연구</span>
+      <button id="tech-tree-close" onclick="TechTreeModal.close()">✕</button>
+    </div>
+    <div id="tech-tree-content"></div>
+    <div id="tech-tree-legend">
+      <span class="ttl-item locked">■ 연구 불가</span>
+      <span class="ttl-item available">■ 연구 가능</span>
+      <span class="ttl-item researching">■ 연구 중</span>
+      <span class="ttl-item done">■ 연구 완료</span>
+    </div>
+  </div>
+</div>
 
 <!-- ── Action Panel ── -->
 <div id="action-panel-overlay" style="display:none">
