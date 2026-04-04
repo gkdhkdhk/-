@@ -884,6 +884,7 @@
       <span aria-label="철"><span aria-hidden="true">⚙</span> <span id="res-iron">0</span></span>
       <span aria-label="목재"><span aria-hidden="true">🪵</span> <span id="res-wood">0</span></span>
       <span id="trade-income-display" style="font-size:11px;color:#f5a623;margin-left:8px;cursor:pointer" onclick="ActionPanels.openTrade()" title="교역로 관리">🛤 +0/월</span>
+      <button class="ctrl-btn" onclick="ActionPanels.openTech()" title="기술 연구" style="font-size:13px;padding:4px 8px">🔬</button>
     </div>
     <button id="oneclick-start-btn">▶ 원클릭 시작</button>
     <a id="editor-link" href="editor.html" target="_blank"
@@ -4317,6 +4318,21 @@ const AlertSystem = (() => {
       },
       action: 'open_diplomacy',
     },
+    {
+      id: 'tech_available',
+      icon: '🔬',
+      text: '연구 가능',
+      detail: '연구 가능한 기술이 있습니다. 기술 패널을 확인하세요.',
+      priority: 'low',
+      check() {
+        try {
+          if (TechManager.getInProgress('고려')) return false;
+          const all = Object.values(TechManager.getAllTechs()).flatMap(c => c.techs);
+          return all.some(t => TechManager.canResearch('고려', t.id));
+        } catch(e) { return false; }
+      },
+      action: 'open_tech',
+    },
   ];
 
   let activeAlerts = [];
@@ -4364,6 +4380,7 @@ const AlertSystem = (() => {
       case 'open_events':      ActionPanels.openEvents(); break;
       case 'open_province':    ActionPanels.openProvinceList(); break;
       case 'open_trade':       ActionPanels.openTrade(); break;
+      case 'open_tech':        ActionPanels.openTech(); break;
     }
   }
 
@@ -4894,7 +4911,73 @@ const ActionPanels = (() => {
     });
   }
 
-  return { openEconomy, openCharacters, openStability, openDiplomacy, openEvents, openProvinceList, openTrade, close, refresh, _stabilityBoost, _sendGift, _assignHeir, _openMarriage };
+  // ── 기술 패널 ──
+  function openTech() {
+    _open('🔬', '기술 연구', () => {
+      const factionId = '고려';
+      const ip      = TechManager.getInProgress(factionId);
+      const st      = FactionManager.getFactionState(factionId);
+      const gold    = st ? Math.floor(st.gold || 0) : 0;
+      const bonuses = TechManager.getBonuses(factionId);
+      const doneCount  = TechManager.getTechCount(factionId);
+      const totalCount = TechManager.getTotalTechCount();
+
+      let html = `<div class="ap-section">
+        <div class="ap-section-title">연구 현황</div>
+        <div class="ap-row"><span class="ap-label">완료 기술</span><span class="ap-value positive">${doneCount} / ${totalCount}</span></div>
+        <div class="ap-row"><span class="ap-label">보유 금화</span><span class="ap-value">${gold}💰</span></div>
+        <div class="ap-row"><span class="ap-label">월 수입 보너스</span><span class="ap-value positive">+${bonuses.incomeBonus}💰/월</span></div>
+      </div>`;
+
+      if (ip) {
+        const allTechs = Object.values(TechManager.getAllTechs()).flatMap(c => c.techs);
+        const ipTech = allTechs.find(t => t.id === ip.techId);
+        const pct = Math.round(ip.progress / ip.required * 100);
+        html += `<div class="ap-section">
+          <div class="ap-section-title">🔬 연구 진행 중</div>
+          <div class="ap-row">
+            <span class="ap-label">${ipTech ? ipTech.name : ip.techId}</span>
+            <span class="ap-value">${ip.progress}/${ip.required}개월</span>
+          </div>
+          <div style="background:#0a1020;border-radius:4px;height:8px;margin:4px 0 8px;overflow:hidden">
+            <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,#e94560,#f5a623)"></div>
+          </div>
+        </div>`;
+      }
+
+      for (const [, cat] of Object.entries(TechManager.getAllTechs())) {
+        html += `<div class="ap-section"><div class="ap-section-title">${cat.label}</div>`;
+        for (const tech of cat.techs) {
+          const done       = TechManager.isResearched(factionId, tech.id);
+          const can        = TechManager.canResearch(factionId, tech.id);
+          const prereqDone = !tech.prereq || TechManager.isResearched(factionId, tech.prereq);
+          const statusLabel = done
+            ? '<span style="color:#4caf50">✓ 완료</span>'
+            : ip
+              ? '<span style="color:#f5a623">연구 중</span>'
+              : !prereqDone
+                ? '<span style="color:#445">🔒 잠김</span>'
+                : gold < tech.cost
+                  ? `<span style="color:#e94560">💰${tech.cost} 부족</span>`
+                  : `<span style="color:#c0d8f0">💰${tech.cost}</span>`;
+          html += `<div class="ap-row" style="opacity:${done || can || prereqDone ? 1 : 0.5}">
+            <span class="ap-label">${tech.name}<br>
+              <small style="color:#556">${tech.desc}</small></span>
+            <span class="ap-value">${statusLabel}</span>
+          </div>`;
+          if (can) {
+            html += `<button class="ap-action-btn" onclick="TechManager.startResearch('${factionId}','${tech.id}');ActionPanels.openTech()">
+              🔬 연구 시작 <span class="btn-cost">💰${tech.cost}</span>
+            </button>`;
+          }
+        }
+        html += '</div>';
+      }
+      return html;
+    });
+  }
+
+  return { openEconomy, openCharacters, openStability, openDiplomacy, openEvents, openProvinceList, openTrade, openTech, close, refresh, _stabilityBoost, _sendGift, _assignHeir, _openMarriage };
 })();
 
 /* ════════════════════════════════════════════════════════
@@ -5491,9 +5574,169 @@ const TradeRouteManager = (() => {
   };
 })();
 
+/* ════════════════════════════════════════════════════════
+   TechManager — M12 기술/발전 트리 시스템
+════════════════════════════════════════════════════════ */
+const TechManager = (() => {
+  'use strict';
+
+  // 기술 트리 정의: 4개 카테고리 × 각 4단계
+  const TECH_TREE = {
+    military: {
+      label: '⚔ 군사',
+      techs: [
+        { id: 'mil_1', name: '기본 훈련',  cost: 50,  prereq: null,    effect: { military: 10 },                        desc: '병사 기본 훈련 체계 확립' },
+        { id: 'mil_2', name: '철제 갑주',  cost: 100, prereq: 'mil_1', effect: { military: 20 },                        desc: '철제 방어구 보급, 전투력 +20' },
+        { id: 'mil_3', name: '공성 기술',  cost: 180, prereq: 'mil_2', effect: { military: 30, siegeBonus: true },       desc: '공성 장비 발전, 성 공략 강화' },
+        { id: 'mil_4', name: '정예 금위군', cost: 280, prereq: 'mil_3', effect: { military: 50 },                       desc: '최정예 군대 창설' },
+      ]
+    },
+    economy: {
+      label: '💰 경제',
+      techs: [
+        { id: 'eco_1', name: '농업 개량',   cost: 50,  prereq: null,    effect: { incomeBonus: 5 },                     desc: '경작지 확대, 월 수입 +5' },
+        { id: 'eco_2', name: '수공업 진흥', cost: 100, prereq: 'eco_1', effect: { incomeBonus: 10 },                    desc: '직물·도자기 생산, 월 수입 +10' },
+        { id: 'eco_3', name: '화폐 통일',   cost: 180, prereq: 'eco_2', effect: { incomeBonus: 15, goldBonus: 50 },     desc: '통화 체계 정비, 월 수입 +15' },
+        { id: 'eco_4', name: '해상 무역로', cost: 280, prereq: 'eco_3', effect: { incomeBonus: 25 },                    desc: '원양 교역 개척, 월 수입 +25' },
+      ]
+    },
+    admin: {
+      label: '📜 행정',
+      techs: [
+        { id: 'adm_1', name: '관료제 정비', cost: 50,  prereq: null,    effect: { stability: 1 },                       desc: '중앙집권 강화, 안정도 +1' },
+        { id: 'adm_2', name: '법전 편찬',   cost: 100, prereq: 'adm_1', effect: { stability: 1, prestige: 10 },         desc: '법률 체계 확립' },
+        { id: 'adm_3', name: '지방관 파견', cost: 180, prereq: 'adm_2', effect: { stability: 1, provinceDevBonus: true }, desc: '지방 행정 강화, 프로빈스 발전도 보너스' },
+        { id: 'adm_4', name: '과거제 실시', cost: 280, prereq: 'adm_3', effect: { stability: 2, prestige: 20 },         desc: '인재 등용 제도화' },
+      ]
+    },
+    culture: {
+      label: '🎭 문화',
+      techs: [
+        { id: 'cul_1', name: '유교 장려',   cost: 50,  prereq: null,    effect: { prestige: 10 },                       desc: '유교 이념 보급, 위신 +10' },
+        { id: 'cul_2', name: '불교 후원',   cost: 100, prereq: 'cul_1', effect: { prestige: 20, stability: 1 },         desc: '사찰 건립, 민심 안정' },
+        { id: 'cul_3', name: '목판 인쇄',   cost: 180, prereq: 'cul_2', effect: { prestige: 25, incomeBonus: 5 },       desc: '고려대장경, 문화적 위신 상승' },
+        { id: 'cul_4', name: '청자 문화',   cost: 280, prereq: 'cul_3', effect: { prestige: 40, tradeBonus: true },     desc: '고려청자 명성, 교역 수입 보너스' },
+      ]
+    }
+  };
+
+  // 세력별 연구 상태: { factionId → Set<techId> }
+  const _researched = {};
+  // 진행 중인 연구: { factionId → { techId, progress, required } }
+  const _inProgress = {};
+  // 누적 경제 보너스: { factionId → { incomeBonus: number } }
+  const _bonuses = {};
+
+  function _ensureFaction(factionId) {
+    if (!_researched[factionId]) _researched[factionId] = new Set();
+    if (!_bonuses[factionId])    _bonuses[factionId]    = { incomeBonus: 0 };
+  }
+
+  function getAllTechs() { return TECH_TREE; }
+
+  function isResearched(factionId, techId) {
+    _ensureFaction(factionId);
+    return _researched[factionId].has(techId);
+  }
+
+  function canResearch(factionId, techId) {
+    _ensureFaction(factionId);
+    const tech = _findTech(techId);
+    if (!tech) return false;
+    if (isResearched(factionId, techId)) return false;
+    if (_inProgress[factionId]) return false;
+    if (tech.prereq && !isResearched(factionId, tech.prereq)) return false;
+    const allStates = FactionManager.getAllFactionStates();
+    const s = allStates[factionId];
+    return s && (s.gold || 0) >= tech.cost;
+  }
+
+  function _findTech(techId) {
+    for (const cat of Object.values(TECH_TREE)) {
+      const t = cat.techs.find(t => t.id === techId);
+      if (t) return t;
+    }
+    return null;
+  }
+
+  /** 연구 시작 (즉시 비용 지불, 3개월 후 완료) */
+  function startResearch(factionId, techId) {
+    if (!canResearch(factionId, techId)) {
+      Notifications.push(`연구 불가: ${techId}`, 'warn');
+      return false;
+    }
+    const tech = _findTech(techId);
+    FactionManager.addGold(factionId, -tech.cost);
+    _inProgress[factionId] = { techId, progress: 0, required: 3 };
+    Notifications.push(`🔬 ${factionId}: ${tech.name} 연구 시작 (3개월 소요)`, 'good');
+    ActionPanels.refresh();
+    AlertSystem.refresh();
+    return true;
+  }
+
+  /** 연구 완료 처리 */
+  function _completeResearch(factionId) {
+    const ip = _inProgress[factionId];
+    if (!ip) return;
+    const tech = _findTech(ip.techId);
+    _ensureFaction(factionId);
+    _researched[factionId].add(ip.techId);
+    delete _inProgress[factionId];
+
+    // 효과 적용 — getAllFactionStates()로 실제 상태 직접 수정
+    const allStates = FactionManager.getAllFactionStates();
+    const s = allStates[factionId];
+    if (s && tech.effect) {
+      if (tech.effect.military)    s.military  = (s.military  || 0) + tech.effect.military;
+      if (tech.effect.stability)   s.stability = Math.min(100, (s.stability || 0) + tech.effect.stability);
+      if (tech.effect.prestige)    s.prestige  = (s.prestige  || 0) + tech.effect.prestige;
+      if (tech.effect.goldBonus)   FactionManager.addGold(factionId, tech.effect.goldBonus);
+      if (tech.effect.incomeBonus) {
+        _bonuses[factionId].incomeBonus = (_bonuses[factionId].incomeBonus || 0) + tech.effect.incomeBonus;
+      }
+    }
+
+    Notifications.push(`✅ ${factionId}: ${tech.name} 연구 완료!`, 'good');
+    AlertSystem.refresh();
+  }
+
+  /** 월별 처리: 연구 진행 + 경제 보너스 수입 */
+  function onMonthTick() {
+    for (const factionId of Object.keys(_inProgress)) {
+      _inProgress[factionId].progress++;
+      if (_inProgress[factionId].progress >= _inProgress[factionId].required) {
+        _completeResearch(factionId);
+      }
+    }
+    // 경제 보너스 수입 적용
+    for (const [factionId, bonus] of Object.entries(_bonuses)) {
+      if (bonus.incomeBonus > 0) {
+        FactionManager.addGold(factionId, bonus.incomeBonus);
+      }
+    }
+  }
+
+  function getInProgress(factionId)  { return _inProgress[factionId] || null; }
+  function getResearched(factionId)  { _ensureFaction(factionId); return [..._researched[factionId]]; }
+  function getBonuses(factionId)     { _ensureFaction(factionId); return { ..._bonuses[factionId] }; }
+  function getTechCount(factionId)   { _ensureFaction(factionId); return _researched[factionId].size; }
+  function getTotalTechCount()       { return Object.values(TECH_TREE).reduce((s, c) => s + c.techs.length, 0); }
+
+  function init() {
+    _ensureFaction('고려');
+  }
+
+  return {
+    init, getAllTechs, isResearched, canResearch, startResearch,
+    onMonthTick, getInProgress, getResearched, getBonuses,
+    getTechCount, getTotalTechCount,
+  };
+})();
+
 window.addEventListener('load', () => {
   MapRenderer.init();
   Notifications.init();
+  TechManager.init();
   GameCore.start();
 
   // 타임바
@@ -5506,6 +5749,7 @@ window.addEventListener('load', () => {
     EconomyEngine.onMonthTick();
     EventEngine.checkEvents();
     TradeRouteManager.onMonthTick();
+    TechManager.onMonthTick();
     WarSystem.onMonthTick(GameCore.getState().month);
     DiplomacyManager.onMonthTick();
     AlertSystem.refresh();
