@@ -6080,7 +6080,7 @@ const TradeRouteManager = (() => {
 const TechManager = (() => {
   'use strict';
 
-  // 기술 트리 정의: 4개 카테고리 × 각 4단계
+  // 기술 트리 정의: 4개 카테고리 × 확장 (총 30개)
   const TECH_TREE = {
     military: {
       label: '⚔ 군사',
@@ -6089,6 +6089,9 @@ const TechManager = (() => {
         { id: 'mil_2', name: '철제 갑주',  cost: 100, prereq: 'mil_1', effect: { military: 20 },                        desc: '철제 방어구 보급, 전투력 +20' },
         { id: 'mil_3', name: '공성 기술',  cost: 180, prereq: 'mil_2', effect: { military: 30, siegeBonus: true },       desc: '공성 장비 발전, 성 공략 강화' },
         { id: 'mil_4', name: '정예 금위군', cost: 280, prereq: 'mil_3', effect: { military: 50 },                       desc: '최정예 군대 창설' },
+        { id: 'mil_5', name: '정예 기병대', cost: 350, prereqs: ['mil_2', 'mil_3'], effect: { military: 60, combatBonus: 0.12 }, desc: '정예 기병 부대 편성, 전투력 +12%' },
+        { id: 'mil_6', name: '화약 기술',  cost: 420, prereqs: ['mil_4'], effect: { military: 70, combatBonus: 0.15, siegeBonus: 0.25 }, desc: '화약 무기 도입, 공성 능력 강화' },
+        { id: 'mil_7', name: '전략적 요새', cost: 500, prereqs: ['mil_5', 'mil_6'], effect: { military: 80, defenseBonus: 0.20 }, desc: '전략 요충지 요새화, 방어력 +20%' },
       ]
     },
     economy: {
@@ -6098,6 +6101,10 @@ const TechManager = (() => {
         { id: 'eco_2', name: '수공업 진흥', cost: 100, prereq: 'eco_1', effect: { incomeBonus: 10 },                    desc: '직물·도자기 생산, 월 수입 +10' },
         { id: 'eco_3', name: '화폐 통일',   cost: 180, prereq: 'eco_2', effect: { incomeBonus: 15, goldBonus: 50 },     desc: '통화 체계 정비, 월 수입 +15' },
         { id: 'eco_4', name: '해상 무역로', cost: 280, prereq: 'eco_3', effect: { incomeBonus: 25 },                    desc: '원양 교역 개척, 월 수입 +25' },
+        { id: 'eco_5', name: '곡물 창고',   cost: 320, prereqs: ['eco_1', 'eco_2'], effect: { incomeBonus: 15 },        desc: '비축 창고 건설, 월 수입 +15' },
+        { id: 'eco_6', name: '해상 교역',   cost: 380, prereqs: ['eco_3'], effect: { incomeBonus: 20, tradeBonus: 0.10 }, desc: '해상 교역망 확대, 월 수입 +20, 교역 +10%' },
+        { id: 'eco_7', name: '왕립 은행',   cost: 460, prereqs: ['eco_6', 'eco_4'], effect: { incomeBonus: 30 },        desc: '금융 기관 설립, 월 수입 +30' },
+        { id: 'eco_8', name: '국부론',      cost: 560, prereqs: ['eco_5', 'eco_7'], effect: { incomeBonus: 50 },        desc: '선진 경제 이론 정립, 월 수입 +50' },
       ]
     },
     admin: {
@@ -6107,6 +6114,10 @@ const TechManager = (() => {
         { id: 'adm_2', name: '법전 편찬',   cost: 100, prereq: 'adm_1', effect: { stability: 1, prestige: 10 },         desc: '법률 체계 확립' },
         { id: 'adm_3', name: '지방관 파견', cost: 180, prereq: 'adm_2', effect: { stability: 1, provinceDevBonus: true }, desc: '지방 행정 강화, 프로빈스 발전도 보너스' },
         { id: 'adm_4', name: '과거제 실시', cost: 280, prereq: 'adm_3', effect: { stability: 2, prestige: 20 },         desc: '인재 등용 제도화' },
+        { id: 'adm_5', name: '감찰 제도',   cost: 340, prereqs: ['adm_2', 'adm_3'], effect: { stability: 0.3 },         desc: '관리 감찰 체계 수립, 안정도 +0.3' },
+        { id: 'adm_6', name: '역참 제도',   cost: 400, prereqs: ['adm_3'], effect: { stability: 0.2, incomeBonus: 10 }, desc: '전국 역참망 정비, 안정도 +0.2, 수입 +10' },
+        { id: 'adm_7', name: '중앙집권',    cost: 480, prereqs: ['adm_6', 'adm_5'], effect: { stability: 0.5, taxBonus: 0.15 }, desc: '강력한 중앙 통치 확립, 안정도 +0.5, 세수 +15%' },
+        { id: 'adm_8', name: '제국 행정',   cost: 580, prereqs: ['adm_3', 'adm_7'], effect: { stability: 1.0, incomeBonus: 40 }, desc: '제국 수준의 행정 체계, 안정도 +1, 수입 +40' },
       ]
     },
     culture: {
@@ -6116,6 +6127,9 @@ const TechManager = (() => {
         { id: 'cul_2', name: '불교 후원',   cost: 100, prereq: 'cul_1', effect: { prestige: 20, stability: 1 },         desc: '사찰 건립, 민심 안정' },
         { id: 'cul_3', name: '목판 인쇄',   cost: 180, prereq: 'cul_2', effect: { prestige: 25, incomeBonus: 5 },       desc: '고려대장경, 문화적 위신 상승' },
         { id: 'cul_4', name: '청자 문화',   cost: 280, prereq: 'cul_3', effect: { prestige: 40, tradeBonus: true },     desc: '고려청자 명성, 교역 수입 보너스' },
+        { id: 'cul_5', name: '인쇄술',      cost: 340, prereqs: ['cul_4', 'cul_1'], effect: { stability: 0.3 },         desc: '활자 인쇄술 발전, 안정도 +0.3' },
+        { id: 'cul_6', name: '국학 설립',   cost: 420, prereqs: ['cul_3', 'cul_5'], effect: { stability: 0.5, prestige: 10 }, desc: '고등 교육 기관 설립, 안정도 +0.5, 위신 +10' },
+        { id: 'cul_7', name: '황금기 선포', cost: 540, prereqs: ['cul_2', 'cul_4', 'cul_6'], effect: { prestige: 30, stability: 1.0, incomeBonus: 20 }, desc: '문화 황금기 선포, 위신 +30, 안정도 +1, 수입 +20' },
       ]
     }
   };
@@ -6144,7 +6158,9 @@ const TechManager = (() => {
     const tech = _findTech(techId);
     if (!tech) return false;
     if (isResearched(factionId, techId)) return false;
-    if (tech.prereq && !isResearched(factionId, tech.prereq)) return false;
+    // 단일 prereq 또는 prereqs 배열 모두 지원
+    const prereqs = tech.prereqs || (tech.prereq ? [tech.prereq] : []);
+    if (!prereqs.every(pid => isResearched(factionId, pid))) return false;
     const allStates = FactionManager.getAllFactionStates();
     const s = allStates[factionId];
     return s && (s.gold || 0) >= tech.cost;
@@ -6331,6 +6347,12 @@ const TechTreeModal = (() => {
     const gold = st ? Math.floor(st.gold || 0) : 0;
     let html = '';
 
+    // 전체 기술 이름 맵 (id → name) — 다중 선행 표시에 사용
+    const techNameMap = {};
+    for (const cat of Object.values(allTech)) {
+      cat.techs.forEach(t => { techNameMap[t.id] = t.name; });
+    }
+
     for (const [catKey, cat] of Object.entries(allTech)) {
       html += `<div class="tt-row">
         <div class="tt-cat-label">${cat.label}</div>
@@ -6338,7 +6360,9 @@ const TechTreeModal = (() => {
 
       cat.techs.forEach((tech, idx) => {
         const done = TechManager.isResearched(factionId, tech.id);
-        const prereqDone = !tech.prereq || TechManager.isResearched(factionId, tech.prereq);
+        // prereqs 배열 또는 단일 prereq 모두 지원
+        const prereqList = tech.prereqs || (tech.prereq ? [tech.prereq] : []);
+        const prereqDone = prereqList.every(pid => TechManager.isResearched(factionId, pid));
         const isResearching = ip && ip.techId === tech.id;
         const canAfford = gold >= tech.cost;
 
@@ -6369,6 +6393,15 @@ const TechTreeModal = (() => {
         if (!done) html += `<div class="tt-card-cost">💰 ${tech.cost}</div>`;
         html += `<div class="tt-card-desc">${tech.desc}</div>`;
         if (effectParts.length) html += `<div class="tt-card-desc" style="color:#6a8a5a;margin-top:2px">${effectParts.join(' · ')}</div>`;
+        // 다중 선행 기술 표시
+        if (prereqList.length >= 2) {
+          const prereqNames = prereqList.map(pid => {
+            const nm = techNameMap[pid] || pid;
+            const isDone = TechManager.isResearched(factionId, pid);
+            return `<span style="color:${isDone ? '#6a8a5a' : '#c06060'}">${nm}</span>`;
+          }).join(' + ');
+          html += `<div class="tt-card-desc" style="margin-top:3px;font-size:10px;color:#8090a0">선행: ${prereqNames}</div>`;
+        }
         if (isResearching) {
           const pct = Math.round(ip.progress / ip.required * 100);
           html += `<div class="tt-card-months">${ip.progress}/${ip.required}개월</div>`;
@@ -6377,7 +6410,10 @@ const TechTreeModal = (() => {
         html += `</div>`;
 
         if (idx < cat.techs.length - 1) {
-          html += `<div class="tt-arrow">→</div>`;
+          // 다중 선행인 경우 분기 화살표(⇒), 단일 선행은 일반 화살표
+          const nextTech = cat.techs[idx + 1];
+          const nextHasMultiPrereq = (nextTech.prereqs && nextTech.prereqs.length >= 2);
+          html += `<div class="tt-arrow">${nextHasMultiPrereq ? '⇒' : '→'}</div>`;
         }
       });
 
@@ -7125,7 +7161,7 @@ const MilitaryUI = (() => {
   });
 
   // ── 고무밴드 드래그 선택 ──
-  function _selectDivisionsInRect(rect) {
+  function _selectDivisionsInRect(rect, silent) {
     const allDivs = MilitaryManager.getDivisionsByFaction(PLAYER_FACTION);
     _selectedDivIds = [];
     allDivs.forEach(div => {
@@ -7136,7 +7172,7 @@ const MilitaryUI = (() => {
         _selectedDivIds.push(div.id);
       }
     });
-    if (_selectedDivIds.length > 0) {
+    if (!silent && _selectedDivIds.length > 0) {
       Notifications.push(`✔ ${_selectedDivIds.length}개 사단 선택됨 — 우클릭으로 이동 명령`, '');
     }
   }
@@ -7162,13 +7198,18 @@ const MilitaryUI = (() => {
         w: Math.abs(dx),
         h: Math.abs(dy),
       };
+      // 실시간 즉시 선택 갱신 (silent — 알림은 mouseup에서만 표시)
+      _selectDivisionsInRect(_dragRect, true /* silent: 알림은 mouseup에서만 표시 */);
       MapRenderer.markDirty();
     }
   });
   _canvas.addEventListener('mouseup', e => {
     if (!_militaryMode || e.button !== 0) return;
     if (_dragRect && (_dragRect.w > 8 || _dragRect.h > 8)) {
-      _selectDivisionsInRect(_dragRect);
+      // mousemove에서 이미 선택 완료 — 알림 표시 및 패널 갱신만 수행
+      if (_selectedDivIds.length > 0) {
+        Notifications.push(`✔ ${_selectedDivIds.length}개 사단 선택됨 — 우클릭으로 이동 명령`, '');
+      }
       _dragRect = null;
       _dragStart = null;
       _showMilitaryPanel();
