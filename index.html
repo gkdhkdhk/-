@@ -5646,8 +5646,9 @@ const TechManager = (() => {
     if (isResearched(factionId, techId)) return false;
     if (_inProgress[factionId]) return false;
     if (tech.prereq && !isResearched(factionId, tech.prereq)) return false;
-    const st = FactionManager.getFactionState(factionId);
-    return st && (st.gold || 0) >= tech.cost;
+    const allStates = FactionManager.getAllFactionStates();
+    const s = allStates[factionId];
+    return s && (s.gold || 0) >= tech.cost;
   }
 
   function _findTech(techId) {
@@ -5665,8 +5666,7 @@ const TechManager = (() => {
       return false;
     }
     const tech = _findTech(techId);
-    const st = FactionManager.getFactionState(factionId);
-    st.gold -= tech.cost;
+    FactionManager.addGold(factionId, -tech.cost);
     _inProgress[factionId] = { techId, progress: 0, required: 3 };
     Notifications.push(`🔬 ${factionId}: ${tech.name} 연구 시작 (3개월 소요)`, 'good');
     ActionPanels.refresh();
@@ -5683,13 +5683,14 @@ const TechManager = (() => {
     _researched[factionId].add(ip.techId);
     delete _inProgress[factionId];
 
-    // 효과 적용
-    const st = FactionManager.getFactionState(factionId);
-    if (st && tech.effect) {
-      if (tech.effect.military)    st.military  = (st.military  || 100) + tech.effect.military;
-      if (tech.effect.stability)   st.stability = Math.min(100, (st.stability || 0) + tech.effect.stability);
-      if (tech.effect.prestige)    st.prestige  = (st.prestige  || 0) + tech.effect.prestige;
-      if (tech.effect.goldBonus)   st.gold      = (st.gold      || 0) + tech.effect.goldBonus;
+    // 효과 적용 — getAllFactionStates()로 실제 상태 직접 수정
+    const allStates = FactionManager.getAllFactionStates();
+    const s = allStates[factionId];
+    if (s && tech.effect) {
+      if (tech.effect.military)    s.military  = (s.military  || 0) + tech.effect.military;
+      if (tech.effect.stability)   s.stability = Math.min(100, (s.stability || 0) + tech.effect.stability);
+      if (tech.effect.prestige)    s.prestige  = (s.prestige  || 0) + tech.effect.prestige;
+      if (tech.effect.goldBonus)   FactionManager.addGold(factionId, tech.effect.goldBonus);
       if (tech.effect.incomeBonus) {
         _bonuses[factionId].incomeBonus = (_bonuses[factionId].incomeBonus || 0) + tech.effect.incomeBonus;
       }
@@ -5710,8 +5711,7 @@ const TechManager = (() => {
     // 경제 보너스 수입 적용
     for (const [factionId, bonus] of Object.entries(_bonuses)) {
       if (bonus.incomeBonus > 0) {
-        const st = FactionManager.getFactionState(factionId);
-        if (st) st.gold = (st.gold || 0) + bonus.incomeBonus;
+        FactionManager.addGold(factionId, bonus.incomeBonus);
       }
     }
   }
