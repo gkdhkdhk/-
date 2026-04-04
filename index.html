@@ -4241,6 +4241,37 @@ const AlertSystem = (() => {
       },
       action: 'open_diplomacy',
     },
+    {
+      id: 'no_alliance',
+      icon: '🤝',
+      text: '고립 외교',
+      priority: 'low',
+      detail: '동맹 세력이 없습니다. 외교 패널에서 동맹을 체결하세요.',
+      check() {
+        try {
+          const others = ['북방부족', '남방', '동방', '해상세력'];
+          return others.every(f => !DiplomacyManager.isAlly('고려', f));
+        } catch(e) { return false; }
+      },
+      action: 'open_diplomacy',
+    },
+    {
+      id: 'vassal_revolt_risk',
+      icon: '⚡',
+      text: '종속 반란 위험',
+      priority: 'medium',
+      detail: '종속 세력의 관계도가 매우 낮아 반란 위험이 있습니다.',
+      check() {
+        try {
+          const vassals = DiplomacyManager.getVassals('고려');
+          return vassals.some(v => {
+            const rel = FactionManager.getRelation ? FactionManager.getRelation('고려', v) : 0;
+            return rel < -30;
+          });
+        } catch(e) { return false; }
+      },
+      action: 'open_diplomacy',
+    },
   ];
 
   let activeAlerts = [];
@@ -4569,6 +4600,88 @@ const ActionPanels = (() => {
         </div>
       ` : '';
 
+      // 동맹 섹션
+      const allyFactions = ['북방부족', '남방', '동방', '해상세력'];
+      let allyHtml = `<div class="ap-section"><div class="ap-section-title">🤝 동맹 관계</div>`;
+      allyFactions.forEach(f => {
+        const allied = DiplomacyManager.isAlly('고려', f);
+        const rel = FactionManager.getRelation ? FactionManager.getRelation('고려', f) : 0;
+        if (allied) {
+          allyHtml += `
+            <div class="ap-row">
+              <span class="ap-label">${f}</span>
+              <span class="ap-value positive">동맹 중</span>
+            </div>
+            <button class="ap-action-btn" onclick="DiplomacyManager.breakAlliance('고려','${f}');ActionPanels.openDiplomacy()">
+              💔 동맹 파기
+            </button>`;
+        } else {
+          const canAlly = rel >= 20;
+          allyHtml += `
+            <div class="ap-row">
+              <span class="ap-label">${f}</span>
+              <span class="ap-value ${rel >= 0 ? 'positive' : 'negative'}">${rel > 0 ? '+' : ''}${rel}</span>
+            </div>
+            <button class="ap-action-btn" ${!canAlly ? 'disabled' : ''} onclick="DiplomacyManager.proposeAlliance('고려','${f}');ActionPanels.openDiplomacy()">
+              🤝 동맹 제의 <span class="btn-cost">관계 20+ 필요</span>
+            </button>`;
+        }
+      });
+      allyHtml += '</div>';
+
+      // 교역 협정 섹션
+      const deals = DiplomacyManager.getTradeDeals();
+      let dealHtml = `<div class="ap-section"><div class="ap-section-title">📦 교역 협정</div>`;
+      const dealFactions = ['북방부족', '남방', '동방', '해상세력'];
+      dealFactions.forEach(f => {
+        const deal = deals.find(d => (d.from === '고려' && d.to === f) || (d.from === f && d.to === '고려'));
+        if (deal) {
+          dealHtml += `
+            <div class="ap-row">
+              <span class="ap-label">${f}</span>
+              <span class="ap-value positive">+${deal.bonus}💰/월 (${deal.months}개월 남음)</span>
+            </div>
+            <button class="ap-action-btn" onclick="DiplomacyManager.cancelTradeDeal('고려','${f}');ActionPanels.openDiplomacy()">
+              ❌ 협정 해지
+            </button>`;
+        } else {
+          const rel = FactionManager.getRelation ? FactionManager.getRelation('고려', f) : 0;
+          dealHtml += `
+            <button class="ap-action-btn" ${rel < 0 ? 'disabled' : ''} onclick="DiplomacyManager.proposeTradeDeal('고려','${f}');ActionPanels.openDiplomacy()">
+              📦 ${f} 교역 협정 <span class="btn-cost">관계 0+ 필요</span>
+            </button>`;
+        }
+      });
+      dealHtml += '</div>';
+
+      // 종속 관계 섹션
+      const vassals = DiplomacyManager.getVassals('고려');
+      let vassalHtml = `<div class="ap-section"><div class="ap-section-title">👑 종속 세력</div>`;
+      if (vassals.length > 0) {
+        vassals.forEach(v => {
+          vassalHtml += `
+            <div class="ap-row">
+              <span class="ap-label">${v}</span>
+              <span class="ap-value">종속 중 (조공 10%/월)</span>
+            </div>
+            <button class="ap-action-btn" onclick="DiplomacyManager.releaseVassal('${v}');ActionPanels.openDiplomacy()">
+              🆓 독립 허용
+            </button>`;
+        });
+      } else {
+        vassalHtml += `<div class="ap-row"><span class="ap-label">종속 세력 없음</span></div>`;
+        const potentialVassals = ['북방부족', '남방', '동방', '해상세력'];
+        potentialVassals.forEach(f => {
+          if (!DiplomacyManager.isVassal(f)) {
+            vassalHtml += `
+              <button class="ap-action-btn" onclick="DiplomacyManager.makeVassal('고려','${f}');ActionPanels.openDiplomacy()">
+                👑 ${f} 종속화 <span class="btn-cost">위신 30 필요</span>
+              </button>`;
+          }
+        });
+      }
+      vassalHtml += '</div>';
+
       return `
         <div class="ap-section">
           <div class="ap-section-title">세력 관계도</div>
@@ -4580,6 +4693,9 @@ const ActionPanels = (() => {
         </div>
         ${tributeSection}
         ${occSection}
+        ${allyHtml}
+        ${dealHtml}
+        ${vassalHtml}
       `;
     });
   }
@@ -5087,6 +5203,202 @@ const TradeRouteManager = (() => {
   return { init, openRoute, closeRoute, onMonthTick, blockRoute, getRoutes, getState, calcMonthlyIncome };
 })();
 
+// ═══════════════════════════════════════════════════════
+//  DiplomacyManager — M11 외교 고도화
+// ═══════════════════════════════════════════════════════
+const DiplomacyManager = (() => {
+  'use strict';
+
+  // ── 게임 밸런스 상수 ──────────────────────────────────
+  const ALLIANCE_REL_MIN        = 20;   // 동맹 제의 최소 관계도
+  const ALLIANCE_REL_BONUS      = 10;   // 동맹 체결 시 관계 보정
+  const ALLIANCE_BREAK_PENALTY  = -25;  // 동맹 파기 시 관계 페널티
+  const VASSAL_PRESTIGE_COST    = 30;   // 종속화 위신 비용
+  const VASSAL_REL_PENALTY      = -15;  // 종속화 시 관계 페널티
+  const VASSAL_RELEASE_BONUS    = 20;   // 독립 허용 시 관계 보정
+  const VASSAL_TRIBUTE_RATE     = 0.1;  // 조공 비율 (금고의 10%)
+  const TRADE_REL_MIN           = 0;    // 교역 협정 최소 관계도
+  const TRADE_DEAL_BONUS        = 15;   // 교역 협정 월별 수입
+  const TRADE_DEAL_DURATION     = 12;   // 교역 협정 기간 (개월)
+  const TRADE_REL_BONUS         = 5;    // 교역 협정 체결 시 관계 보정
+  const TRADE_CANCEL_PENALTY    = -10;  // 교역 협정 해지 시 관계 페널티
+  const RELATION_DRIFT_DECAY    = -1;   // 관계도 자연 감소
+  const RELATION_DRIFT_RECOVERY = 1;    // 관계도 자연 회복
+
+  // ── 세력 목록 ──────────────────────────────────────────
+  const ALL_FACTIONS = ['고려', '북방부족', '남방', '동방', '해상세력'];
+
+  // ── 동맹 ──────────────────────────────────────────────
+  // _alliances: Set of "factionA:factionB" (정렬된 쌍)
+  const _alliances = new Set();
+
+  function _allyKey(a, b) {
+    return [a, b].sort().join(':');
+  }
+
+  function proposeAlliance(from, to) {
+    const rel = FactionManager.getRelation ? FactionManager.getRelation(from, to) : 0;
+    if (rel < ALLIANCE_REL_MIN) {
+      Notifications.push(`🤝 동맹 제의 실패: ${from} ↔ ${to} 관계도 부족 (현재 ${rel}, 필요 ${ALLIANCE_REL_MIN}+)`, 'warn');
+      return false;
+    }
+    if (_alliances.has(_allyKey(from, to))) {
+      Notifications.push(`이미 동맹 관계입니다`, 'warn');
+      return false;
+    }
+    _alliances.add(_allyKey(from, to));
+    if (FactionManager.modRelation) FactionManager.modRelation(from, to, ALLIANCE_REL_BONUS);
+    Notifications.push(`🤝 ${from} ↔ ${to} 동맹 체결!`, 'good');
+    return true;
+  }
+
+  function breakAlliance(from, to) {
+    if (!_alliances.has(_allyKey(from, to))) return false;
+    _alliances.delete(_allyKey(from, to));
+    if (FactionManager.modRelation) FactionManager.modRelation(from, to, ALLIANCE_BREAK_PENALTY);
+    Notifications.push(`💔 ${from} ↔ ${to} 동맹 파기`, 'warn');
+    return true;
+  }
+
+  function isAlly(a, b) {
+    return _alliances.has(_allyKey(a, b));
+  }
+
+  function getAlliances() {
+    return [..._alliances];
+  }
+
+  // ── 종속 관계 ──────────────────────────────────────────
+  // _vassals: Map<vassal → liege>
+  const _vassals = new Map();
+
+  function makeVassal(liege, vassal) {
+    if (_vassals.has(vassal)) {
+      Notifications.push(`${vassal}은 이미 종속 세력입니다`, 'warn');
+      return false;
+    }
+    const liegeSt = FactionManager.getFactionState(liege);
+    if (!liegeSt || (liegeSt.prestige || 0) < VASSAL_PRESTIGE_COST) {
+      Notifications.push(`종속화 실패: 위신 ${VASSAL_PRESTIGE_COST} 이상 필요`, 'warn');
+      return false;
+    }
+    liegeSt.prestige = (liegeSt.prestige || 0) - VASSAL_PRESTIGE_COST;
+    _vassals.set(vassal, liege);
+    if (FactionManager.modRelation) FactionManager.modRelation(liege, vassal, VASSAL_REL_PENALTY);
+    Notifications.push(`👑 ${vassal} → ${liege} 종속화 완료`, 'good');
+    return true;
+  }
+
+  function releaseVassal(vassal) {
+    if (!_vassals.has(vassal)) return false;
+    const liege = _vassals.get(vassal);
+    _vassals.delete(vassal);
+    if (FactionManager.modRelation) FactionManager.modRelation(liege, vassal, VASSAL_RELEASE_BONUS);
+    Notifications.push(`🆓 ${vassal} 독립 (전 종주: ${liege})`, 'good');
+    return true;
+  }
+
+  function getLiege(vassal) { return _vassals.get(vassal) || null; }
+  function getVassals(liege) {
+    return [..._vassals.entries()].filter(([, l]) => l === liege).map(([v]) => v);
+  }
+  function isVassal(vassal) { return _vassals.has(vassal); }
+
+  // ── 종속 조공 월별 처리 ──────────────────────────────────
+  function processVassalTribute() {
+    _vassals.forEach((liege, vassal) => {
+      const vassalSt = FactionManager.getFactionState(vassal);
+      if (!vassalSt) return;
+      const tribute = Math.floor((vassalSt.gold || 0) * VASSAL_TRIBUTE_RATE);
+      if (tribute > 0) {
+        vassalSt.gold = (vassalSt.gold || 0) - tribute;
+        const liegeSt = FactionManager.getFactionState(liege);
+        if (liegeSt) liegeSt.gold = (liegeSt.gold || 0) + tribute;
+      }
+    });
+  }
+
+  // ── 교역 협정 ──────────────────────────────────────────
+  // _tradeDeals: [{ id, from, to, bonus, months }]
+  const _tradeDeals = [];
+  let _tdIdCounter = 1;
+
+  function proposeTradeDeal(from, to) {
+    const rel = FactionManager.getRelation ? FactionManager.getRelation(from, to) : 0;
+    if (rel < TRADE_REL_MIN) {
+      Notifications.push(`교역 협정 실패: 관계도 ${TRADE_REL_MIN} 이상 필요 (현재 ${rel})`, 'warn');
+      return false;
+    }
+    const existing = _tradeDeals.find(d =>
+      (d.from === from && d.to === to) || (d.from === to && d.to === from));
+    if (existing) {
+      Notifications.push(`이미 교역 협정이 있습니다`, 'warn');
+      return false;
+    }
+    _tradeDeals.push({ id: _tdIdCounter++, from, to, bonus: TRADE_DEAL_BONUS, months: TRADE_DEAL_DURATION });
+    if (FactionManager.modRelation) FactionManager.modRelation(from, to, TRADE_REL_BONUS);
+    Notifications.push(`📦 ${from} ↔ ${to} 교역 협정 체결 (${TRADE_DEAL_DURATION}개월, +${TRADE_DEAL_BONUS}💰/월)`, 'good');
+    return true;
+  }
+
+  function cancelTradeDeal(from, to) {
+    const idx = _tradeDeals.findIndex(d =>
+      (d.from === from && d.to === to) || (d.from === to && d.to === from));
+    if (idx === -1) return false;
+    _tradeDeals.splice(idx, 1);
+    if (FactionManager.modRelation) FactionManager.modRelation(from, to, TRADE_CANCEL_PENALTY);
+    Notifications.push(`❌ ${from} ↔ ${to} 교역 협정 해지`, 'warn');
+    return true;
+  }
+
+  function processTradeDeals() {
+    for (let i = _tradeDeals.length - 1; i >= 0; i--) {
+      const deal = _tradeDeals[i];
+      const fromSt = FactionManager.getFactionState(deal.from);
+      const toSt = FactionManager.getFactionState(deal.to);
+      if (fromSt) fromSt.gold = (fromSt.gold || 0) + deal.bonus;
+      if (toSt) toSt.gold = (toSt.gold || 0) + deal.bonus;
+      deal.months--;
+      if (deal.months <= 0) {
+        _tradeDeals.splice(i, 1);
+        Notifications.push(`📦 ${deal.from} ↔ ${deal.to} 교역 협정 만료`, 'warn');
+      }
+    }
+  }
+
+  function getTradeDeals() { return [..._tradeDeals]; }
+
+  // ── 관계도 자동 회복/악화 ──────────────────────────────
+  function processRelationDrift() {
+    for (let i = 0; i < ALL_FACTIONS.length; i++) {
+      for (let j = i + 1; j < ALL_FACTIONS.length; j++) {
+        if (typeof FactionManager.getRelation !== 'function') continue;
+        const rel = FactionManager.getRelation(ALL_FACTIONS[i], ALL_FACTIONS[j]);
+        if (rel > 0 && rel < 100) {
+          FactionManager.modRelation(ALL_FACTIONS[i], ALL_FACTIONS[j], RELATION_DRIFT_DECAY);
+        } else if (rel < 0 && rel > -100) {
+          FactionManager.modRelation(ALL_FACTIONS[i], ALL_FACTIONS[j], RELATION_DRIFT_RECOVERY);
+        }
+      }
+    }
+  }
+
+  // ── 월별 통합 처리 ──────────────────────────────────────
+  function onMonthTick() {
+    processVassalTribute();
+    processTradeDeals();
+    processRelationDrift();
+  }
+
+  return {
+    proposeAlliance, breakAlliance, isAlly, getAlliances,
+    makeVassal, releaseVassal, getLiege, getVassals, isVassal,
+    proposeTradeDeal, cancelTradeDeal, getTradeDeals,
+    onMonthTick,
+    getAllFactions: () => [...ALL_FACTIONS],
+  };
+})();
+
 window.addEventListener('load', () => {
   MapRenderer.init();
   Notifications.init();
@@ -5104,6 +5416,8 @@ window.addEventListener('load', () => {
     EventEngine.checkEvents();
     TradeRouteManager.onMonthTick();
     WarSystem.onMonthTick(GameCore.getState().month);
+    DiplomacyManager.onMonthTick();
+    AlertSystem.refresh();
     updateResourceBar();
     const el = document.getElementById('trade-income-display');
     if (el) el.textContent = `🛤 +${TradeRouteManager.calcMonthlyIncome()}/월`;
