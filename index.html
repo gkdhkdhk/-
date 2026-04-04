@@ -633,6 +633,87 @@
   .power-bar-bg { height: 10px; background: #0a1020; border-radius: 5px; overflow: hidden; border: 1px solid #1a2a40; display:flex; }
   .power-att-fill { height: 100%; background: linear-gradient(90deg,#e94560,#c43050); border-radius: 5px 0 0 5px; }
   .power-def-fill { height: 100%; background: linear-gradient(90deg,#2563c7,#1a4aaa); border-radius: 0 5px 5px 0; }
+
+/* ── 이벤트 팝업 ── */
+#event-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+#event-popup {
+  background: #14203a;
+  border: 2px solid #f5a623;
+  border-radius: 12px;
+  width: 460px;
+  max-width: 90vw;
+  padding: 0;
+  overflow: hidden;
+  box-shadow: 0 0 40px rgba(245,166,35,0.3);
+}
+#event-header {
+  background: #0f2a40;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid #1a3a60;
+}
+#event-icon { font-size: 24px; }
+#event-title { font-size: 16px; font-weight: bold; color: #f5a623; flex: 1; }
+#event-faction { font-size: 11px; color: #5a8aaa; }
+#event-desc {
+  padding: 16px 18px;
+  font-size: 13px;
+  color: #c0d0e0;
+  line-height: 1.7;
+  background: #0d1828;
+}
+#event-choices { padding: 12px 18px 16px; display: flex; flex-direction: column; gap: 8px; }
+.event-choice-btn {
+  background: #0f2a40;
+  border: 1px solid #2a5a80;
+  color: #c0d8f0;
+  padding: 10px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  text-align: left;
+  transition: all 0.15s;
+  line-height: 1.5;
+}
+.event-choice-btn:hover { background: #1a4a70; border-color: #4a8ac0; color: #fff; }
+.event-choice-btn .choice-effect { font-size: 10px; color: #5a8aaa; display: block; margin-top: 3px; }
+
+/* ── 미니맵 ── */
+#minimap {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  width: 180px;
+  height: 140px;
+  background: rgba(10,15,30,0.9);
+  border: 1px solid #1a3a60;
+  border-radius: 4px;
+  z-index: 8;
+  cursor: pointer;
+}
+
+/* ── 자원 표시바 ── */
+#resource-bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 12px;
+  background: #0a1020;
+  border: 1px solid #1a3050;
+  padding: 3px 10px;
+  border-radius: 4px;
+}
 </style>
 </head>
 <body>
@@ -663,6 +744,12 @@
   </div>
 
   <div class="topbar-right">
+    <div id="resource-bar">
+      <span aria-label="금화"><span aria-hidden="true">💰</span> <span id="res-gold">0</span></span>
+      <span aria-label="식량"><span aria-hidden="true">🌾</span> <span id="res-food">0</span></span>
+      <span aria-label="철"><span aria-hidden="true">⚙</span> <span id="res-iron">0</span></span>
+      <span aria-label="목재"><span aria-hidden="true">🪵</span> <span id="res-wood">0</span></span>
+    </div>
     <button id="oneclick-start-btn">▶ 원클릭 시작</button>
     <a id="editor-link" href="editor.html" target="_blank"
        style="background:#0f3020;border:1px solid #2a7a4a;color:#6ecf9a;padding:5px 12px;border-radius:4px;font-size:12px;text-decoration:none;display:flex;align-items:center;gap:5px;transition:all 0.15s;"
@@ -696,6 +783,7 @@
   <div id="canvas-wrap">
     <canvas id="gameCanvas"></canvas>
     <div id="map-tooltip"></div>
+    <canvas id="minimap" width="180" height="140"></canvas>
   </div>
 
   <!-- 우측 사이드패널 -->
@@ -1537,7 +1625,19 @@ const MapRenderer = (() => {
     GameCore.on('tick', () => { needsRedraw = true; });
   }
 
-  return { render, setMode, markDirty, init, polyCenter };
+  function getViewState() {
+    return { scale: scale, offsetX: offsetX, offsetY: offsetY };
+  }
+
+  function panTo(mapX, mapY) {
+    const canvas = document.getElementById('gameCanvas');
+    if (!canvas) return;
+    offsetX = canvas.width  / 2 - mapX * scale;
+    offsetY = canvas.height / 2 - mapY * scale;
+    markDirty();
+  }
+
+  return { render, setMode, markDirty, init, polyCenter, getViewState, panTo };
 })();
 
 
@@ -3277,8 +3377,572 @@ const Notifications = (() => {
 
 
 /* ════════════════════════════════════════════════════════
+   M09 — EconomyEngine (경제 엔진 고도화)
+════════════════════════════════════════════════════════ */
+const EconomyEngine = (() => {
+  "use strict";
+
+  const FOOD_SURPLUS_THRESHOLD = 300; // food stock above this triggers surplus trade
+  const MAX_FOOD_TRADE_AMOUNT  = 80;  // max food units transferred per trade
+  const FOOD_STOCK_CAP         = 9999;
+
+  const RESOURCE_YIELD = {
+    '곡물': { food: 15 }, '쌀': { food: 20 },
+    '철광': { iron: 12 }, '구리': { iron: 8 },
+    '목재': { wood: 10 }, '금': { gold: 8 },
+    '어류': { food: 8 }, '소금': { gold: 3, food: 3 },
+    '말': { cavalry_bonus: 0.1 }, '직물': { gold: 6 },
+    '도자기': { gold: 7 }, '인삼': { gold: 10 },
+    '교역품': { gold: 12 }, '진주': { gold: 15 },
+    '약초': { gold: 5 }, '면화': { gold: 6 },
+  };
+
+  const BUILDING_YIELD = {
+    '농장': { food: 20 }, '목장': { food: 15, cavalry_bonus: 0.05 },
+    '채굴장': { iron: 15 }, '제련소': { iron: 20, gold: 5 },
+    '목재소': { wood: 18 }, '항구': { gold: 20, food: 10 },
+    '교역소': { gold: 18 }, '시장': { gold: 22 },
+    '창고': { storage_bonus: 0.2 }, '사원': { stability: 0.3 },
+    '학당': { tech_points: 1 }, '성벽': { defense_bonus: 0.15 },
+    '요새': { defense_bonus: 0.3 }, '왕궁': { gold: 30, stability: 0.5 },
+    '어항': { food: 12, gold: 8 },
+  };
+
+  // 세력별 자원 재고
+  const _stocks = {};
+
+  function _getFactions() {
+    return Object.values(ProvinceManager.getFactions()).filter(f => f.id !== '미지');
+  }
+
+  function _initStocks() {
+    _getFactions().forEach(f => {
+      const st = FactionManager.getFactionState(f.id);
+      _stocks[f.id] = { gold: (st && st.gold) || 500, food: 200, iron: 100, wood: 80 };
+    });
+  }
+
+  function calcProvinceOutput(province) {
+    const out = { gold: 0, food: 0, iron: 0, wood: 0 };
+    if (province.resources) {
+      province.resources.forEach(r => {
+        const y = RESOURCE_YIELD[r];
+        if (y) {
+          if (y.gold)  out.gold  += y.gold;
+          if (y.food)  out.food  += y.food;
+          if (y.iron)  out.iron  += y.iron;
+          if (y.wood)  out.wood  += y.wood;
+        }
+      });
+    }
+    if (province.buildings) {
+      province.buildings.forEach(b => {
+        const y = BUILDING_YIELD[b];
+        if (y) {
+          if (y.gold)  out.gold  += y.gold;
+          if (y.food)  out.food  += y.food;
+          if (y.iron)  out.iron  += y.iron;
+          if (y.wood)  out.wood  += y.wood;
+        }
+      });
+    }
+    const dev = province.development || 1;
+    out.gold  = Math.round(out.gold  * (1 + dev * 0.05));
+    out.food  = Math.round(out.food  * (1 + dev * 0.03));
+    out.iron  = Math.round(out.iron  * (1 + dev * 0.02));
+    out.wood  = Math.round(out.wood  * (1 + dev * 0.02));
+    return out;
+  }
+
+  function calcFactionResources(factionId) {
+    const provinces = ProvinceManager.getFactionProvinces(factionId);
+    const total = { gold: 0, food: 0, iron: 0, wood: 0 };
+    provinces.forEach(p => {
+      const out = calcProvinceOutput(p);
+      total.gold += out.gold;
+      total.food += out.food;
+      total.iron += out.iron;
+      total.wood += out.wood;
+    });
+    return total;
+  }
+
+  function getStocks() { return _stocks; }
+
+  function getStock(factionId) {
+    return _stocks[factionId] || { gold: 0, food: 0, iron: 0, wood: 0 };
+  }
+
+  function onMonthTick() {
+    const factions = _getFactions();
+    // 초기화 보장
+    factions.forEach(f => {
+      if (!_stocks[f.id]) {
+        const st = FactionManager.getFactionState(f.id);
+        _stocks[f.id] = { gold: (st && st.gold) || 500, food: 200, iron: 100, wood: 80 };
+      }
+    });
+
+    factions.forEach(f => {
+      const out = calcFactionResources(f.id);
+      const s = _stocks[f.id];
+
+      s.gold  = Math.max(0, s.gold  + out.gold);
+      // food is allowed to go negative here so shortage detection below can apply a penalty
+      s.food  += out.food;
+      s.iron  = Math.max(0, s.iron  + out.iron);
+      s.wood  = Math.max(0, s.wood  + out.wood);
+
+      if (s.food < 0) {
+        // 안정도 패널티
+        const allStates = FactionManager.getAllFactionStates();
+        if (allStates[f.id]) {
+          allStates[f.id].stability = Math.max(0, (allStates[f.id].stability || 50) - 3);
+        }
+        Notifications.push(`⚠ ${f.name} 식량 부족! 안정도가 하락합니다`, 'warn');
+        s.food = 0;
+      } else {
+        s.food = Math.min(s.food, FOOD_STOCK_CAP);
+      }
+    });
+
+    _doFoodTrade(factions);
+  }
+
+  function _doFoodTrade(factions) {
+    const surplusFactions = factions.filter(f => (_stocks[f.id] || {}).food > FOOD_SURPLUS_THRESHOLD);
+    const deficitFactions = factions.filter(f => (_stocks[f.id] || {}).food < 50);
+    surplusFactions.forEach(sf => {
+      deficitFactions.forEach(df => {
+        if (sf.id === df.id) return;
+        const rel = FactionManager.getRelation(sf.id, df.id);
+        if (rel >= 25) {
+          const tradeAmt = Math.min(MAX_FOOD_TRADE_AMOUNT, (_stocks[sf.id].food - FOOD_SURPLUS_THRESHOLD));
+          if (tradeAmt > 0) {
+            _stocks[sf.id].food -= tradeAmt;
+            _stocks[df.id].food += tradeAmt;
+            Notifications.push(`🤝 ${sf.name} → ${df.name} 식량 교역 (${tradeAmt})`);
+          }
+        }
+      });
+    });
+  }
+
+  _initStocks();
+
+  return { calcProvinceOutput, calcFactionResources, onMonthTick, getStock, getStocks, RESOURCE_YIELD, BUILDING_YIELD };
+})();
+
+
+/* ════════════════════════════════════════════════════════
+   M13 — EventEngine (이벤트 엔진)
+════════════════════════════════════════════════════════ */
+const EventEngine = (() => {
+  "use strict";
+
+  const EVENT_COOLDOWN_MONTHS  = 6;   // months before same event can fire again for a faction
+  const EVENT_TRANSITION_DELAY = 500; // ms delay before showing the next queued event
+
+  const EVENT_DEFS = [
+    {
+      id: 'drought_plains',
+      title: '대가뭄',
+      icon: '☀',
+      desc: '극심한 가뭄이 평원 지역을 강타했습니다. 농업 생산량이 크게 줄어들 것입니다.',
+      trigger: { terrain: 'plains', probability: 0.008 },
+      choices: [
+        { text: '비상 식량 배급 (금화 -50)', effect: { gold: -50, food: 30, stability: 5 } },
+        { text: '방치한다', effect: { food: -40, stability: -10, population: -5000 } },
+      ]
+    },
+    {
+      id: 'merchant_windfall',
+      title: '행상 대박',
+      icon: '💰',
+      desc: '해안 교역로에 외국 상선이 들어왔습니다. 교역 수익이 크게 증가했습니다.',
+      trigger: { building: '항구', probability: 0.015 },
+      choices: [
+        { text: '환영한다 (금화 +120)', effect: { gold: 120, prestige: 5 } },
+        { text: '관세를 부과한다 (금화 +80, 관계 -5)', effect: { gold: 80, relation_all: -5 } },
+      ]
+    },
+    {
+      id: 'bandit_raid',
+      title: '도적 출몰',
+      icon: '🗡',
+      desc: '산적떼가 인근 마을을 약탈하고 있습니다.',
+      trigger: { stability_below: 50, probability: 0.012 },
+      choices: [
+        { text: '병력을 파견한다 (금화 -30)', effect: { gold: -30, stability: 8 } },
+        { text: '현상금을 건다 (금화 -20)', effect: { gold: -20, stability: 4 } },
+        { text: '무시한다', effect: { stability: -5, population: -2000 } },
+      ]
+    },
+    {
+      id: 'plague',
+      title: '역병 발생',
+      icon: '☠',
+      desc: '치명적인 역병이 도시를 덮쳤습니다. 신속한 대응이 필요합니다.',
+      trigger: { population_above: 150000, probability: 0.005 },
+      choices: [
+        { text: '격리 조치 (금화 -80)', effect: { gold: -80, population: -8000 } },
+        { text: '약재를 수입한다 (금화 -120)', effect: { gold: -120, population: -3000, stability: 5 } },
+        { text: '신께 기도한다', effect: { population: -20000, stability: -15 } },
+      ]
+    },
+    {
+      id: 'harvest_festival',
+      title: '풍년 축제',
+      icon: '🌾',
+      desc: '올해는 유난히 풍작이었습니다. 백성들이 기뻐하고 있습니다.',
+      trigger: { terrain: 'plains', stability_above: 60, probability: 0.02 },
+      choices: [
+        { text: '축제를 열다 (금화 -20, 민심 +)', effect: { gold: -20, stability: 12, prestige: 8 } },
+        { text: '조세를 늘린다 (금화 +60, 민심 -)', effect: { gold: 60, stability: -8 } },
+      ]
+    },
+    {
+      id: 'rebel_uprising',
+      title: '민란 발생',
+      icon: '⚡',
+      desc: '극심한 압정에 지친 백성들이 봉기했습니다!',
+      trigger: { stability_below: 25, probability: 0.018 },
+      choices: [
+        { text: '군사적으로 진압한다 (금화 -50)', effect: { gold: -50, stability: 10, prestige: -5 } },
+        { text: '요구를 들어준다 (세금 감면)', effect: { gold: -40, stability: 20 } },
+      ]
+    },
+    {
+      id: 'diplomatic_marriage',
+      title: '혼인 제의',
+      icon: '💒',
+      desc: '인접 세력에서 혼인 동맹을 제의해왔습니다.',
+      trigger: { relation_above: 20, probability: 0.006 },
+      choices: [
+        { text: '수락한다 (관계 +15)', effect: { relation_target: 15, prestige: 10 } },
+        { text: '거절한다 (관계 -10)', effect: { relation_target: -10 } },
+      ]
+    },
+    {
+      id: 'tech_breakthrough',
+      title: '기술 발전',
+      icon: '📜',
+      desc: '학자들이 새로운 농업/제련 기술을 발견했습니다.',
+      trigger: { building: '학당', probability: 0.01 },
+      choices: [
+        { text: '전국에 보급한다 (금화 -60)', effect: { gold: -60, development_all: 1 } },
+        { text: '일부에만 적용한다 (금화 -20)', effect: { gold: -20 } },
+      ]
+    },
+  ];
+
+  let _eventQueue = [];
+  let _activeEvent = null;
+  let _activeContext = null;
+  const _cooldown = {}; // eventId:factionId → remaining months
+
+  function _getFactions() {
+    return Object.values(ProvinceManager.getFactions()).filter(f => f.id !== '미지');
+  }
+
+  function _checkTrigger(def, faction, provinces) {
+    const t = def.trigger;
+    const st = FactionManager.getFactionState(faction.id);
+    const stability = st ? (st.stability || 50) : 50;
+
+    const cdKey = def.id + ':' + faction.id;
+    if (_cooldown[cdKey] && _cooldown[cdKey] > 0) {
+      _cooldown[cdKey]--;
+      return false;
+    }
+
+    let passes = true;
+    if (t.stability_below !== undefined && stability >= t.stability_below) passes = false;
+    if (t.stability_above !== undefined && stability < t.stability_above) passes = false;
+    if (t.terrain) {
+      const hasTerrain = provinces.some(p => p.terrain === t.terrain);
+      if (!hasTerrain) passes = false;
+    }
+    if (t.building) {
+      const hasBuilding = provinces.some(p => p.buildings && p.buildings.includes(t.building));
+      if (!hasBuilding) passes = false;
+    }
+    if (t.population_above) {
+      const totalPop = provinces.reduce((s, p) => s + (p.population || 0), 0);
+      if (totalPop < t.population_above) passes = false;
+    }
+    if (t.relation_above !== undefined) {
+      const allFactions = _getFactions();
+      const hasGoodRelation = allFactions.some(other => {
+        if (other.id === faction.id) return false;
+        return FactionManager.getRelation(faction.id, other.id) >= t.relation_above;
+      });
+      if (!hasGoodRelation) passes = false;
+    }
+
+    if (!passes) return false;
+    return Math.random() < t.probability;
+  }
+
+  function checkEvents() {
+    if (_activeEvent) return;
+    const factions = _getFactions();
+    factions.forEach(faction => {
+      const provinces = ProvinceManager.getFactionProvinces(faction.id);
+      if (!provinces.length) return;
+
+      EVENT_DEFS.forEach(def => {
+        if (_activeEvent) return;
+        if (_checkTrigger(def, faction, provinces)) {
+          _cooldown[def.id + ':' + faction.id] = EVENT_COOLDOWN_MONTHS;
+          let targetFaction = null;
+          if (def.trigger.relation_above !== undefined) {
+            const candidates = factions.filter(other => {
+              if (other.id === faction.id) return false;
+              return FactionManager.getRelation(faction.id, other.id) >= (def.trigger.relation_above || 0);
+            });
+            if (candidates.length) targetFaction = candidates[Math.floor(Math.random() * candidates.length)];
+          }
+          _eventQueue.push({ def, faction, targetFaction });
+        }
+      });
+    });
+
+    if (_eventQueue.length && !_activeEvent) {
+      const next = _eventQueue.shift();
+      showEvent(next.def, { faction: next.faction, targetFaction: next.targetFaction });
+    }
+  }
+
+  function _effectText(effect) {
+    const parts = [];
+    if (effect.gold)            parts.push(`금화 ${effect.gold > 0 ? '+' : ''}${effect.gold}`);
+    if (effect.food)            parts.push(`식량 ${effect.food > 0 ? '+' : ''}${effect.food}`);
+    if (effect.stability)       parts.push(`안정도 ${effect.stability > 0 ? '+' : ''}${effect.stability}`);
+    if (effect.prestige)        parts.push(`위신 ${effect.prestige > 0 ? '+' : ''}${effect.prestige}`);
+    if (effect.population)      parts.push(`인구 ${effect.population > 0 ? '+' : ''}${effect.population}`);
+    if (effect.relation_all)    parts.push(`전체 관계 ${effect.relation_all > 0 ? '+' : ''}${effect.relation_all}`);
+    if (effect.relation_target) parts.push(`대상 관계 ${effect.relation_target > 0 ? '+' : ''}${effect.relation_target}`);
+    if (effect.development_all) parts.push(`전 프로빈스 개발도 +${effect.development_all}`);
+    return parts.join(', ');
+  }
+
+  function showEvent(def, context) {
+    _activeEvent = def;
+    _activeContext = context;
+
+    const overlay = document.getElementById('event-overlay');
+    if (!overlay) return;
+
+    document.getElementById('event-icon').textContent    = def.icon;
+    document.getElementById('event-title').textContent   = def.title;
+    document.getElementById('event-faction').textContent = context.faction ? context.faction.name : '';
+    document.getElementById('event-desc').textContent    = def.desc;
+
+    const choicesEl = document.getElementById('event-choices');
+    choicesEl.innerHTML = '';
+    def.choices.forEach((choice, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'event-choice-btn';
+      btn.innerHTML = choice.text + '<span class="choice-effect">' + _effectText(choice.effect) + '</span>';
+      btn.addEventListener('click', () => resolveChoice(i));
+      choicesEl.appendChild(btn);
+    });
+
+    if (!GameCore.getState().paused) GameCore.togglePause();
+    overlay.style.display = 'flex';
+  }
+
+  function resolveChoice(choiceIdx) {
+    if (!_activeEvent) return;
+    const def     = _activeEvent;
+    const context = _activeContext;
+    const choice  = def.choices[choiceIdx];
+    const effect  = choice.effect;
+    const faction = context && context.faction;
+
+    if (faction) {
+      const stock = EconomyEngine.getStock(faction.id);
+      if (effect.gold)      stock.gold = Math.max(0, stock.gold + effect.gold);
+      if (effect.food)      stock.food = Math.max(0, stock.food + effect.food);
+
+      const allStates = FactionManager.getAllFactionStates();
+      if (effect.stability && allStates[faction.id]) {
+        allStates[faction.id].stability = Math.max(0, Math.min(100,
+          (allStates[faction.id].stability || 50) + effect.stability));
+      }
+      if (effect.prestige && allStates[faction.id]) {
+        allStates[faction.id].prestige = (allStates[faction.id].prestige || 0) + effect.prestige;
+      }
+      if (effect.relation_all) {
+        _getFactions().forEach(other => {
+          if (other.id !== faction.id)
+            FactionManager.modRelation(faction.id, other.id, effect.relation_all);
+        });
+      }
+      if (effect.relation_target && context.targetFaction) {
+        FactionManager.modRelation(faction.id, context.targetFaction.id, effect.relation_target);
+      }
+      if (effect.development_all) {
+        ProvinceManager.getFactionProvinces(faction.id).forEach(p => {
+          p.development = (p.development || 1) + effect.development_all;
+        });
+      }
+    }
+
+    Notifications.push(`📜 ${def.title}: ${choice.text.split('(')[0].trim()}`, 'good');
+
+    const overlay = document.getElementById('event-overlay');
+    if (overlay) overlay.style.display = 'none';
+    if (GameCore.getState().paused) GameCore.togglePause();
+
+    _activeEvent   = null;
+    _activeContext = null;
+
+    setTimeout(() => {
+      if (_eventQueue.length) {
+        const next = _eventQueue.shift();
+        showEvent(next.def, { faction: next.faction, targetFaction: next.targetFaction });
+      }
+    }, EVENT_TRANSITION_DELAY);
+  }
+
+  return { checkEvents, showEvent, resolveChoice, getQueue: () => _eventQueue };
+})();
+
+
+/* ════════════════════════════════════════════════════════
+   MinimapRenderer — 미니맵
+════════════════════════════════════════════════════════ */
+const MinimapRenderer = (() => {
+  "use strict";
+
+  let _canvas = null;
+  let _ctx    = null;
+  const W = 180, H = 140;
+
+  function init() {
+    _canvas = document.getElementById('minimap');
+    if (!_canvas) return;
+    _ctx = _canvas.getContext('2d');
+    _canvas.addEventListener('click', _onClick);
+    update();
+  }
+
+  function _getMapBounds() {
+    const provinces = ProvinceManager.getAll();
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    provinces.forEach(p => {
+      if (!p.polygon) return;
+      p.polygon.forEach(([x, y]) => {
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+      });
+    });
+    return { minX, minY, maxX, maxY };
+  }
+
+  function update() {
+    if (!_ctx) return;
+    _ctx.clearRect(0, 0, W, H);
+    _ctx.fillStyle = '#0a0a1a';
+    _ctx.fillRect(0, 0, W, H);
+
+    const provinces = ProvinceManager.getAll();
+    const bounds = _getMapBounds();
+    if (bounds.minX === Infinity) return;
+
+    const bw = bounds.maxX - bounds.minX || 1;
+    const bh = bounds.maxY - bounds.minY || 1;
+    const pad = 4;
+    const scaleX = (W - pad * 2) / bw;
+    const scaleY = (H - pad * 2) / bh;
+    const mmScale = Math.min(scaleX, scaleY);
+    const offX    = pad + (W - pad * 2 - bw * mmScale) / 2;
+    const offY    = pad + (H - pad * 2 - bh * mmScale) / 2;
+
+    const FACTION_COLORS = {
+      '고려': '#3a8a5a', '북방부족': '#8a3a3a', '남방': '#8a7a3a',
+      '동방호족': '#3a5a8a', '서방상인': '#7a4a8a',
+    };
+    provinces.forEach(p => {
+      if (!p.polygon || !p.polygon.length) return;
+      _ctx.beginPath();
+      p.polygon.forEach(([x, y], i) => {
+        const mx = offX + (x - bounds.minX) * mmScale;
+        const my = offY + (y - bounds.minY) * mmScale;
+        i === 0 ? _ctx.moveTo(mx, my) : _ctx.lineTo(mx, my);
+      });
+      _ctx.closePath();
+      _ctx.fillStyle = FACTION_COLORS[p.faction] || '#2a3a4a';
+      _ctx.fill();
+      _ctx.strokeStyle = '#0a1020';
+      _ctx.lineWidth = 0.5;
+      _ctx.stroke();
+    });
+
+    // 뷰포트 사각형
+    const vs = MapRenderer.getViewState();
+    if (vs) {
+      const gameCanvas = document.getElementById('gameCanvas');
+      const cw = gameCanvas ? gameCanvas.width  : 800;
+      const ch = gameCanvas ? gameCanvas.height : 600;
+      const vx1 = (-vs.offsetX) / vs.scale;
+      const vy1 = (-vs.offsetY) / vs.scale;
+      const vx2 = vx1 + cw / vs.scale;
+      const vy2 = vy1 + ch / vs.scale;
+      const rx1 = offX + (vx1 - bounds.minX) * mmScale;
+      const ry1 = offY + (vy1 - bounds.minY) * mmScale;
+      const rx2 = offX + (vx2 - bounds.minX) * mmScale;
+      const ry2 = offY + (vy2 - bounds.minY) * mmScale;
+      _ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+      _ctx.lineWidth = 1.5;
+      _ctx.strokeRect(rx1, ry1, rx2 - rx1, ry2 - ry1);
+    }
+  }
+
+  function _onClick(e) {
+    if (!_canvas) return;
+    const rect = _canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    const bounds = _getMapBounds();
+    if (bounds.minX === Infinity) return;
+
+    const bw = bounds.maxX - bounds.minX || 1;
+    const bh = bounds.maxY - bounds.minY || 1;
+    const pad = 4;
+    const mmScale = Math.min((W - pad * 2) / bw, (H - pad * 2) / bh);
+    const offX    = pad + (W - pad * 2 - bw * mmScale) / 2;
+    const offY    = pad + (H - pad * 2 - bh * mmScale) / 2;
+
+    const mapX = bounds.minX + (mx - offX) / mmScale;
+    const mapY = bounds.minY + (my - offY) / mmScale;
+
+    MapRenderer.panTo(mapX, mapY);
+  }
+
+  return { init, update };
+})();
+
+
+/* ════════════════════════════════════════════════════════
    초기화
 ════════════════════════════════════════════════════════ */
+function updateResourceBar() {
+  const factionId = '고려';
+  const stock = EconomyEngine.getStock(factionId);
+  const goldEl = document.getElementById('res-gold');
+  const foodEl = document.getElementById('res-food');
+  const ironEl = document.getElementById('res-iron');
+  const woodEl = document.getElementById('res-wood');
+  if (goldEl) goldEl.textContent = (stock.gold || 0).toLocaleString();
+  if (foodEl) foodEl.textContent = (stock.food || 0).toLocaleString();
+  if (ironEl) ironEl.textContent = (stock.iron || 0).toLocaleString();
+  if (woodEl) woodEl.textContent = (stock.wood || 0).toLocaleString();
+}
+
 window.addEventListener('load', () => {
   MapRenderer.init();
   Notifications.init();
@@ -3289,7 +3953,12 @@ window.addEventListener('load', () => {
   TimeBar.update(GameCore.getState());
 
   // M04: 매월 경제 틱
-  GameCore.on('newMonth', () => FactionManager.onMonthTick());
+  GameCore.on('newMonth', () => {
+    FactionManager.onMonthTick();
+    EconomyEngine.onMonthTick();
+    EventEngine.checkEvents();
+    updateResourceBar();
+  });
   // M05: 매년 캐릭터 나이 진행
   GameCore.on('newYear',  s  => {
     CharacterManager.onYearTick();
@@ -3306,6 +3975,13 @@ window.addEventListener('load', () => {
 
   // 초기 경제 계산
   FactionManager.onMonthTick();
+  // EconomyEngine 초기화
+  EconomyEngine.onMonthTick();
+  updateResourceBar();
+
+  // 미니맵 초기화
+  MinimapRenderer.init();
+  GameCore.on('tick', () => MinimapRenderer.update());
 
   // 테스트용 초기 전투 생성 (Phase 4 데모)
   // 1. 한성 전투: 고려(공격) vs 북방부족(방어) — 2일째 진행 중
@@ -3347,5 +4023,17 @@ window.addEventListener('load', () => {
   setTimeout(() => UI.showFactionPanel(), 100);
 });
 </script>
+<!-- ── 이벤트 팝업 오버레이 ── -->
+<div id="event-overlay" style="display:none" role="dialog" aria-modal="true" aria-labelledby="event-title">
+  <div id="event-popup">
+    <div id="event-header">
+      <span id="event-icon" aria-hidden="true">🌾</span>
+      <span id="event-title">이벤트</span>
+      <span id="event-faction"></span>
+    </div>
+    <div id="event-desc"></div>
+    <div id="event-choices"></div>
+  </div>
+</div>
 </body>
 </html>
