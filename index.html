@@ -1657,15 +1657,10 @@ const ProvinceManager = (() => {
   PROVINCES_DATA.forEach(p => {
     byId[p.id] = p;
     byPickColor[p.pickColor] = p;
-    // 구역 초기화 (최초 1회)
+    // 구역 초기화 (최초 1회) — ZONE_NAMES 키에서 자동 생성
     if (!p.zones) {
-      p.zones = {
-        core:  { building: null },
-        east:  { building: null },
-        west:  { building: null },
-        south: { building: null },
-        north: { building: null },
-      };
+      p.zones = {};
+      Object.keys(ZONE_NAMES).forEach(zk => { p.zones[zk] = { building: null }; });
     }
   });
 
@@ -2162,7 +2157,7 @@ const MapRenderer = (() => {
   // ── 이벤트 ──
   canvas.addEventListener('click', e => {
     // 고무밴드 드래그 직후의 click 이벤트는 선택 초기화 방지를 위해 무시
-    if (typeof MilitaryUI !== 'undefined' && MilitaryUI.consumeDragEnd && MilitaryUI.consumeDragEnd()) return;
+    if (typeof MilitaryUI !== 'undefined' && MilitaryUI.consumeDragEnd()) return;
     const rect = canvas.getBoundingClientRect();
     const p = provinceAtPixel(e.clientX - rect.left, e.clientY - rect.top);
     if (typeof MilitaryUI !== 'undefined' && MilitaryUI.isActive()) {
@@ -2450,6 +2445,16 @@ const UI = (() => {
     const fs = FactionManager.getFactionState('고려');
     if (!fs) return;
 
+  // 구역 탭으로 복귀하는 헬퍼
+  function _restoreZoneTab() {
+    setTimeout(() => {
+      const tabs = document.querySelectorAll('#province-panel .panel-tab');
+      tabs.forEach(t => {
+        if (t.textContent.trim() === '구역') UI._switchProvTab(t, 'prov-zones');
+      });
+    }, 0);
+  }
+
     if (action === 'build') {
       if (!building) { Notifications.push('건물을 선택하세요', 'warn'); return; }
       if (fs.gold < ProvinceManager.ZONE_BUILDING_COST) {
@@ -2459,29 +2464,14 @@ const UI = (() => {
       if (ProvinceManager.buildInZone(provinceId, zone, building)) {
         FactionManager.addGold('고려', -ProvinceManager.ZONE_BUILDING_COST);
         Notifications.push(`🏛 ${p.name} ${ProvinceManager.ZONE_NAMES[zone]}: ${building} 건설 완료`, 'good');
-        showProvince(p); // 패널 갱신
-        // 구역 탭으로 바로 복귀
-        setTimeout(() => {
-          const tabs = document.querySelectorAll('#province-panel .panel-tab');
-          tabs.forEach(t => {
-            if (t.textContent.trim() === '구역') {
-              UI._switchProvTab(t, 'prov-zones');
-            }
-          });
-        }, 0);
+        showProvince(p);
+        _restoreZoneTab();
       }
     } else if (action === 'demolish') {
       if (ProvinceManager.demolishZone(provinceId, zone)) {
         Notifications.push(`🗑 ${p.name} ${ProvinceManager.ZONE_NAMES[zone]}: 건물 철거`, '');
         showProvince(p);
-        setTimeout(() => {
-          const tabs = document.querySelectorAll('#province-panel .panel-tab');
-          tabs.forEach(t => {
-            if (t.textContent.trim() === '구역') {
-              UI._switchProvTab(t, 'prov-zones');
-            }
-          });
-        }, 0);
+        _restoreZoneTab();
       }
     }
   }
@@ -6558,6 +6548,9 @@ const TechTreeModal = (() => {
     const gold = st ? Math.floor(st.gold || 0) : 0;
     let html = '';
 
+    /** 소수 보너스 값을 퍼센트 문자열로 변환 (예: 0.12 → '12%') */
+    const pctBonus = v => `${Math.round(v * 100)}%`;
+
     // 전체 기술 이름 맵 (id → name) — 다중 선행 표시에 사용
     const techNameMap = {};
     for (const cat of Object.values(allTech)) {
@@ -6597,8 +6590,8 @@ const TechTreeModal = (() => {
         if (tech.effect.stability)   effectParts.push(`+${tech.effect.stability} 안정`);
         if (tech.effect.prestige)    effectParts.push(`+${tech.effect.prestige} 위신`);
         if (tech.effect.goldBonus)   effectParts.push(`+${tech.effect.goldBonus}💰`);
-        if (tech.effect.combatBonus)  effectParts.push(`+${Math.round(tech.effect.combatBonus * 100)}% 전투`);
-        if (tech.effect.defenseBonus) effectParts.push(`+${Math.round(tech.effect.defenseBonus * 100)}% 방어`);
+        if (tech.effect.combatBonus)  effectParts.push(`+${pctBonus(tech.effect.combatBonus)} 전투`);
+        if (tech.effect.defenseBonus) effectParts.push(`+${pctBonus(tech.effect.defenseBonus)} 방어`);
 
         html += `<div class="${cardClass}" ${clickAttr}>`;
         if (done) html += `<div class="tt-card-check">✓</div>`;
@@ -6639,8 +6632,8 @@ const TechTreeModal = (() => {
     const bonuses = TechManager.getBonuses(factionId);
     const bonusParts = [];
     if (bonuses.incomeBonus > 0)  bonusParts.push(`💰 +${bonuses.incomeBonus}/월 수입`);
-    if (bonuses.combatBonus > 0)  bonusParts.push(`⚔ +${Math.round(bonuses.combatBonus * 100)}% 전투력`);
-    if (bonuses.defenseBonus > 0) bonusParts.push(`🛡 +${Math.round(bonuses.defenseBonus * 100)}% 방어력`);
+    if (bonuses.combatBonus > 0)  bonusParts.push(`⚔ +${pctBonus(bonuses.combatBonus)} 전투력`);
+    if (bonuses.defenseBonus > 0) bonusParts.push(`🛡 +${pctBonus(bonuses.defenseBonus)} 방어력`);
     const bonusBanner = document.getElementById('tt-active-bonuses');
     if (bonusBanner) {
       bonusBanner.textContent = bonusParts.length > 0
@@ -7438,6 +7431,8 @@ const MilitaryUI = (() => {
         Notifications.push(`✔ ${_selectedDivIds.length}개 사단 선택됨 — 우클릭으로 이동 명령`, '');
       }
       _justDragged = true; // click 이벤트가 뒤따라 오면 무시하도록 표시
+      // 안전 타임아웃: click이 오지 않아도 100ms 후 자동 리셋
+      setTimeout(() => { _justDragged = false; }, 100);
       _dragRect = null;
       _dragStart = null;
       _showMilitaryPanel();
