@@ -485,6 +485,31 @@
   ::-webkit-scrollbar-track { background: #0f1a2e; }
   ::-webkit-scrollbar-thumb { background: #1a3a60; }
 
+  /* ── Resource HUD (캔버스 오버레이) ── */
+  #resource-hud {
+    position: absolute;
+    top: 10px; left: 10px;
+    background: rgba(10, 20, 40, 0.88);
+    border: 1px solid #1a4a7a;
+    border-radius: 8px;
+    padding: 10px 14px;
+    z-index: 10;
+    pointer-events: none;
+    min-width: 220px;
+    font-size: 13px;
+    user-select: none;
+  }
+  .res-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .res-row:last-child { border-bottom: none; }
+  .res-faction-dot { width:12px; height:12px; border-radius:3px; flex-shrink:0; }
+  .res-faction-name { font-size:12px; font-weight:bold; min-width:80px; }
+  .res-gold { color: #f5a623; font-size:12px; font-weight:bold; min-width:60px; }
+  .res-income { font-size:11px; min-width:52px; }
+  .res-stability { font-size:11px; color: #8090a0; }
+
   /* ── 원클릭 시작 버튼 ── */
   #oneclick-start-btn {
     background: #1a6b1a;
@@ -569,6 +594,7 @@
   <div id="canvas-wrap">
     <canvas id="gameCanvas"></canvas>
     <div id="map-tooltip"></div>
+    <div id="resource-hud"></div>
   </div>
 
   <!-- 우측 사이드패널 -->
@@ -585,6 +611,7 @@
           <div id="faction-list"></div>
         </div>
       </div>
+      <div id="division-panel" style="display:none"></div>
       <div id="empty-hint">
         <span class="hint-icon">🏰</span>
         맵의 프로빈스를 클릭하면<br>상세 정보가 표시됩니다.<br><br>
@@ -1018,14 +1045,100 @@ const MapRenderer = (() => {
   let selectedId = null;
   let hoveredId = null;
   let needsRedraw = true;
+  let selectedDivisionId = null;
+  let _moveFlash = null; // { x, y, t } — green flash on right-click move
 
   // 맵 스케일/오프셋 (패닝 확장 가능)
   let scale = 1.0;
-  let offsetX = 30;
-  let offsetY = 20;
+  let offsetX = 0;
+  let offsetY = 0;
+  let _fitScale = 1.0; // 초기 fit scale = MAX_SCALE
+  const MIN_SCALE = 0.4;
 
   // 인구 최대값 (색상 스케일용)
   const maxPop = Math.max(...ProvinceManager.getAll().map(p => p.population));
+
+  // ── 맵 상수 ──
+  const MAP_WIDTH  = 900;  // 월드 좌표 폭
+  const MAP_HEIGHT = 780;  // 월드 좌표 높이
+  const DIVISION_BASE_RADIUS   = 14;  // 사단 원 기본 반지름(px)
+  const DIVISION_PULSE_AMP     = 2;   // 선택 시 펄스 진폭(px)
+  const DIVISION_PULSE_PERIOD  = 300; // 펄스 주기(ms)
+  const DIVISION_CLICK_RADIUS  = 16;  // 클릭 감지 반지름(px)
+  const MOVE_FLASH_DURATION    = 600; // 이동 명령 플래시 지속(ms)
+  const DIVISION_SPACING       = 20;  // 같은 프로빈스 사단 간 기본 간격(px)
+  const DIVISION_SPACING_DIAG  = 14;  // 대각선 방향 간격(px)
+
+  // ── 맵을 캔버스에 맞추기 (contain 방식) ──
+  function fitToCanvas() {
+    _fitScale = Math.min(canvas.width / MAP_WIDTH, canvas.height / MAP_HEIGHT);
+    scale = _fitScale;
+    offsetX = (canvas.width  - MAP_WIDTH  * scale) / 2;
+    offsetY = (canvas.height - MAP_HEIGHT * scale) / 2;
+  }
+
+  // ── 패닝/줌 클램프 ──
+  function _clampOffset() {
+    const mapW = MAP_WIDTH  * scale;
+    const mapH = MAP_HEIGHT * scale;
+    if (mapW <= canvas.width) {
+      offsetX = (canvas.width - mapW) / 2;
+    } else {
+      offsetX = Math.max(canvas.width - mapW, Math.min(0, offsetX));
+    }
+    if (mapH <= canvas.height) {
+      offsetY = (canvas.height - mapH) / 2;
+    } else {
+      offsetY = Math.max(canvas.height - mapH, Math.min(0, offsetY));
+    }
+  }
+
+  // ── 폴리곤 월드 중심점 (transform 없이) ──
+  function polyWorldCenter(poly) {
+    let x = 0, y = 0;
+    poly.forEach(([px, py]) => { x += px; y += py; });
+    return [x / poly.length, y / poly.length];
+  }
+
+  // ── 사단 병종 이모지 ──
+  function _getDivisionEmoji(units) {
+    const nonzero = ['infantry','cavalry','archers','siege'].filter(t => (units[t] || 0) > 0);
+    if (nonzero.length === 0) return '⚔';
+    if (nonzero.length === 1) {
+      return { infantry:'⚔', cavalry:'🐴', archers:'🏹', siege:'🛡' }[nonzero[0]] || '⚔';
+    }
+    return '🛡';
+  }
+
+  // ── 사단 화면 좌표 계산 (idle: 프로빈스 중심 + 오프셋, moving: lerp) ──
+  const _OFFSETS = [
+    [0, 0],
+    [ DIVISION_SPACING, 0], [-DIVISION_SPACING, 0],
+    [0,  DIVISION_SPACING], [0, -DIVISION_SPACING],
+    [ DIVISION_SPACING_DIAG,  DIVISION_SPACING_DIAG],
+    [-DIVISION_SPACING_DIAG,  DIVISION_SPACING_DIAG],
+    [ DIVISION_SPACING_DIAG, -DIVISION_SPACING_DIAG],
+  ];
+  function _getDivisionScreenPos(div, idleByProv) {
+    const fromP = ProvinceManager.getById(div.locationId);
+    if (!fromP) return null;
+    if (div.state === 'moving' && div.targetId && div.totalTravelDays > 0) {
+      const toP = ProvinceManager.getById(div.targetId);
+      if (toP) {
+        const [fx, fy] = polyWorldCenter(fromP.poly);
+        const [tx, ty] = polyWorldCenter(toP.poly);
+        const t = 1 - div.travelDaysLeft / div.totalTravelDays;
+        const wx = fx + (tx - fx) * t;
+        const wy = fy + (ty - fy) * t;
+        return [wx * scale + offsetX, wy * scale + offsetY];
+      }
+    }
+    const [cx, cy] = polyWorldCenter(fromP.poly);
+    const provDivs = idleByProv[div.locationId] || [];
+    const idx = provDivs.findIndex(d => d.id === div.id);
+    const off = _OFFSETS[Math.max(0, idx) % _OFFSETS.length];
+    return [cx * scale + offsetX + off[0], cy * scale + offsetY + off[1]];
+  }
 
   function resize() {
     const wrap = document.getElementById('canvas-wrap');
@@ -1033,6 +1146,7 @@ const MapRenderer = (() => {
     canvas.height = wrap.clientHeight;
     pickCanvas.width = canvas.width;
     pickCanvas.height = canvas.height;
+    fitToCanvas();
     needsRedraw = true;
     buildPickBuffer();
   }
@@ -1188,25 +1302,100 @@ const MapRenderer = (() => {
       // 세력별 중심 프로빈스에 세력명 표시
     }
 
-    // 5.5단계: 사단 배지
+    // 5.5단계: 사단 오브젝트 렌더링
     if (typeof MilitaryManager !== 'undefined') {
-      provinces.forEach(p => {
-        const divsHere = MilitaryManager.getDivisionsAt(p.id);
-        if (divsHere.length === 0) return;
-        const [cx, cy] = polyCenter(p.poly);
-        if (cx < 0 || cx > canvas.width || cy < 0 || cy > canvas.height) return;
-        const hasMoving = divsHere.some(d => d.state === 'moving');
-        const badgeY = cy + (scale > 0.8 ? 22 : 16) * scale;
+      const allDivisions = MilitaryManager.getAllDivisions();
+
+      // 이동 중인 사단 출발지 → 도착지 점선 화살표
+      allDivisions.forEach(div => {
+        if (div.state !== 'moving' || !div.targetId || !div.fromProvinceId) return;
+        const fromP = ProvinceManager.getById(div.fromProvinceId);
+        const toP   = ProvinceManager.getById(div.targetId);
+        if (!fromP || !toP) return;
+        const [fx, fy] = polyWorldCenter(fromP.poly);
+        const [tx, ty] = polyWorldCenter(toP.poly);
+        const sx = fx * scale + offsetX, sy = fy * scale + offsetY;
+        const ex = tx * scale + offsetX, ey = ty * scale + offsetY;
         ctx.save();
-        ctx.fillStyle = 'rgba(20,10,10,0.8)';
-        ctx.fillRect(cx - 13, badgeY - 7, 26, 14);
-        ctx.font = `bold ${Math.max(8, 9 * scale)}px 'Malgun Gothic', sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = hasMoving ? '#f5a623' : '#e94560';
-        ctx.fillText(`\u2694${divsHere.length}`, cx, badgeY);
+        ctx.setLineDash([5, 5]);
+        ctx.strokeStyle = 'rgba(255,255,100,0.35)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+        ctx.setLineDash([]);
+        // 화살표 머리
+        const angle = Math.atan2(ey - sy, ex - sx);
+        ctx.fillStyle = 'rgba(255,255,100,0.55)';
+        ctx.beginPath();
+        ctx.moveTo(ex, ey);
+        ctx.lineTo(ex - 10 * Math.cos(angle - 0.4), ey - 10 * Math.sin(angle - 0.4));
+        ctx.lineTo(ex - 10 * Math.cos(angle + 0.4), ey - 10 * Math.sin(angle + 0.4));
+        ctx.closePath(); ctx.fill();
         ctx.restore();
       });
+
+      // idle 사단 인덱스 맵 구성
+      const idleByProv = {};
+      allDivisions.forEach(div => {
+        if (div.state !== 'moving') {
+          if (!idleByProv[div.locationId]) idleByProv[div.locationId] = [];
+          idleByProv[div.locationId].push(div);
+        }
+      });
+
+      // 사단 원 렌더링
+      const now = Date.now();
+      allDivisions.forEach(div => {
+        const pos = _getDivisionScreenPos(div, idleByProv);
+        if (!pos) return;
+        const [sx, sy] = pos;
+        if (sx < -20 || sx > canvas.width + 20 || sy < -20 || sy > canvas.height + 20) return;
+
+        const isSelected = div.id === selectedDivisionId;
+        const fDef = ProvinceManager.getFaction(div.factionId);
+        const bgColor = fDef ? fDef.color : '#666666';
+        const pulseR = isSelected ? DIVISION_BASE_RADIUS + DIVISION_PULSE_AMP * Math.sin(now / DIVISION_PULSE_PERIOD) : DIVISION_BASE_RADIUS;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(sx, sy, pulseR, 0, Math.PI * 2);
+        ctx.fillStyle = bgColor;
+        ctx.fill();
+        ctx.strokeStyle = isSelected ? '#ffdd44' : 'rgba(255,255,255,0.9)';
+        ctx.lineWidth = isSelected ? 3 : 2;
+        ctx.stroke();
+
+        ctx.font = `${Math.max(10, Math.round(12 * Math.min(scale, 1)))}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(_getDivisionEmoji(div.units), sx, sy);
+
+        const total = (div.units.infantry || 0) + (div.units.cavalry || 0) +
+                      (div.units.archers || 0) + (div.units.siege || 0);
+        ctx.font = `bold ${Math.max(7, Math.round(9 * Math.min(scale, 1)))}px 'Malgun Gothic', sans-serif`;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(total.toLocaleString(), sx, sy + pulseR + 7);
+        ctx.restore();
+      });
+
+      // 이동 명령 플래시 (초록 원)
+      if (_moveFlash) {
+        const age = now - _moveFlash.t;
+        if (age < MOVE_FLASH_DURATION) {
+          const progress = age / MOVE_FLASH_DURATION;
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(_moveFlash.x, _moveFlash.y, 10 + 25 * progress, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(78,207,138,${0.8 * (1 - progress)})`;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.restore();
+        } else {
+          _moveFlash = null;
+        }
+      }
+
+      // 선택 중이거나 플래시 진행 중이면 계속 렌더
+      if (selectedDivisionId !== null || _moveFlash) needsRedraw = true;
     }
 
     // 6단계: 탐라 섬 연결 힌트 선
@@ -1260,7 +1449,37 @@ const MapRenderer = (() => {
   // ── 이벤트 ──
   canvas.addEventListener('click', e => {
     const rect = canvas.getBoundingClientRect();
-    const p = provinceAtPixel(e.clientX - rect.left, e.clientY - rect.top);
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+
+    // 사단 클릭 우선 감지
+    if (typeof MilitaryManager !== 'undefined') {
+      const allDivs = MilitaryManager.getAllDivisions();
+      const idleByProv = {};
+      allDivs.forEach(div => {
+        if (div.state !== 'moving') {
+          if (!idleByProv[div.locationId]) idleByProv[div.locationId] = [];
+          idleByProv[div.locationId].push(div);
+        }
+      });
+      for (const div of allDivs) {
+        const pos = _getDivisionScreenPos(div, idleByProv);
+        if (!pos) continue;
+        const dist = Math.sqrt((cx - pos[0]) ** 2 + (cy - pos[1]) ** 2);
+        if (dist <= DIVISION_CLICK_RADIUS) {
+          selectedDivisionId = div.id;
+          selectedId = null;
+          document.getElementById('status-selected').textContent = `선택: 사단 #${div.id} (${div.factionId})`;
+          UI.showDivision(div);
+          needsRedraw = true;
+          return;
+        }
+      }
+    }
+
+    // 사단 선택 해제 후 프로빈스 피킹
+    selectedDivisionId = null;
+    const p = provinceAtPixel(cx, cy);
     if (p) {
       selectedId = p.id;
       document.getElementById('status-selected').textContent = `선택: ${p.name}`;
@@ -1305,30 +1524,58 @@ const MapRenderer = (() => {
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const newScale = Math.max(0.5, Math.min(3.0, scale * delta));
+    const newScale = Math.max(MIN_SCALE, Math.min(_fitScale, scale * delta));
+    if (newScale === scale) return;
     // 마우스 위치 기준 줌
     offsetX = mx - (mx - offsetX) * (newScale / scale);
     offsetY = my - (my - offsetY) * (newScale / scale);
     scale = newScale;
+    _clampOffset();
     needsRedraw = true;
     buildPickBuffer();
   }, { passive: false });
 
-  // 드래그 패닝
+  // 드래그 패닝 (우클릭 + 사단 미선택 시)
   let dragging = false, dragStartX, dragStartY;
   canvas.addEventListener('mousedown', e => {
-    if (e.button === 2) { dragging = true; dragStartX = e.clientX - offsetX; dragStartY = e.clientY - offsetY; }
+    if (e.button === 2 && selectedDivisionId === null) {
+      dragging = true;
+      dragStartX = e.clientX - offsetX;
+      dragStartY = e.clientY - offsetY;
+    }
   });
   canvas.addEventListener('mousemove', e => {
     if (dragging) {
       offsetX = e.clientX - dragStartX;
       offsetY = e.clientY - dragStartY;
+      _clampOffset();
       needsRedraw = true;
       buildPickBuffer();
     }
   });
   canvas.addEventListener('mouseup', () => { dragging = false; });
-  canvas.addEventListener('contextmenu', e => e.preventDefault());
+  canvas.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    // 사단 선택 중 + 고려 사단인 경우 이동 명령
+    if (selectedDivisionId !== null && typeof MilitaryManager !== 'undefined') {
+      const div = MilitaryManager.getDivisionById(selectedDivisionId);
+      if (div && div.factionId === '고려') {
+        const rect = canvas.getBoundingClientRect();
+        const px = e.clientX - rect.left;
+        const py = e.clientY - rect.top;
+        const target = provinceAtPixel(px, py);
+        if (target && target.id !== div.locationId) {
+          const ok = MilitaryManager.moveDivision(selectedDivisionId, target.id);
+          if (ok) {
+            _moveFlash = { x: px, y: py, t: Date.now() };
+            Notifications.push(`⚔ 사단 #${div.id} → ${target.name} 이동 명령`, 'good');
+            UI.showDivision(MilitaryManager.getDivisionById(selectedDivisionId));
+            needsRedraw = true;
+          }
+        }
+      }
+    }
+  });
 
   function setMode(mode) {
     currentMode = mode;
@@ -1340,13 +1587,22 @@ const MapRenderer = (() => {
 
   function markDirty() { needsRedraw = true; }
 
+  function selectDivision(id) {
+    selectedDivisionId = id;
+    needsRedraw = true;
+    if (id === null) {
+      document.getElementById('status-selected').textContent = '선택: 없음';
+      UI.clearProvince();
+    }
+  }
+
   function init() {
-    resize();
+    resize(); // fitToCanvas() is called inside resize()
     window.addEventListener('resize', () => { resize(); });
     GameCore.on('tick', () => { needsRedraw = true; });
   }
 
-  return { render, setMode, markDirty, init };
+  return { render, setMode, markDirty, selectDivision, init };
 })();
 
 
@@ -1378,6 +1634,7 @@ const UI = (() => {
     document.getElementById('empty-hint').style.display = 'none';
     document.getElementById('province-panel').style.display = 'none';
     document.getElementById('faction-panel').style.display = 'none';
+    document.getElementById('division-panel').style.display = 'none';
   }
   function showEmpty() {
     setHeader('🗺','프로빈스를 클릭하세요');
@@ -1618,7 +1875,92 @@ const UI = (() => {
 
   function clearProvince() { showEmpty(); }
 
-  return { showProvince, clearProvince, showFactionPanel, _switchProvTab };
+  // ── 사단 정보 패널 ──
+  function showDivision(div) {
+    if (!div) { showEmpty(); return; }
+    hideAll();
+    const fDef = ProvinceManager.getFaction(div.factionId);
+    setHeader('⚔', `사단 #${div.id}`);
+    const panel = document.getElementById('division-panel');
+    panel.style.display = 'block';
+
+    const locP = ProvinceManager.getById(div.locationId);
+    const tgtP = div.targetId ? ProvinceManager.getById(div.targetId) : null;
+    const power = typeof MilitaryManager !== 'undefined'
+      ? Math.round(MilitaryManager.calcDivisionPower(div.units, div.factionId, div.locationId))
+      : 0;
+    const totalU = (div.units.infantry || 0) + (div.units.cavalry || 0) +
+                   (div.units.archers || 0) + (div.units.siege || 0);
+    const moveStatus = div.state === 'moving' && tgtP
+      ? `${tgtP.name}으로 이동 중 (${div.travelDaysLeft}일 남음)`
+      : '대기 중';
+
+    const cancelBtn = div.state === 'moving'
+      ? `<button id="div-cancel-btn" class="ctrl-btn" style="flex:1;font-size:11px;padding:4px 8px">이동 취소</button>`
+      : '';
+
+    panel.innerHTML = `
+      <div class="info-section">
+        <h4>⚔ 사단 정보</h4>
+        <div class="info-row">
+          <span class="label">세력</span>
+          <span class="value" style="color:${fDef ? fDef.color : '#fff'}">
+            <span class="faction-dot" style="background:${fDef ? fDef.color : '#555'}"></span>
+            ${fDef ? fDef.name : div.factionId}
+          </span>
+        </div>
+        <div class="info-row">
+          <span class="label">위치</span>
+          <span class="value">${locP ? locP.name : '?'}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">이동</span>
+          <span class="value" style="color:${div.state === 'moving' ? '#f5a623' : '#8090a0'}">${moveStatus}</span>
+        </div>
+      </div>
+      <div class="info-section">
+        <h4>병력 구성 (총 ${totalU.toLocaleString()}명)</h4>
+        ${div.units.infantry ? `<div class="info-row"><span class="label">⚔ 보병</span><span class="value">${div.units.infantry.toLocaleString()}명</span></div>` : ''}
+        ${div.units.cavalry  ? `<div class="info-row"><span class="label">🐴 기병</span><span class="value">${div.units.cavalry.toLocaleString()}명</span></div>` : ''}
+        ${div.units.archers  ? `<div class="info-row"><span class="label">🏹 궁수</span><span class="value">${div.units.archers.toLocaleString()}명</span></div>` : ''}
+        ${div.units.siege    ? `<div class="info-row"><span class="label">🛡 공성대</span><span class="value">${div.units.siege.toLocaleString()}명</span></div>` : ''}
+        <div class="info-row">
+          <span class="label">전투력</span>
+          <span class="value" style="color:#e94560">${power.toLocaleString()}</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        ${cancelBtn}
+        <button id="div-disband-btn" class="ctrl-btn" style="flex:1;font-size:11px;padding:4px 8px;background:#3a1010;border-color:#aa2020;color:#ffa0a0">사단 해산</button>
+      </div>
+      <div style="font-size:10px;color:#446;margin-top:8px">
+        💡 우클릭으로 프로빈스 이동 명령${div.factionId !== '고려' ? '<br>⚠ 고려 사단만 직접 조종 가능' : ''}
+      </div>
+    `;
+
+    // 버튼 이벤트 리스너 (inline onclick 대신 addEventListener 사용)
+    const cancelBtnEl = panel.querySelector('#div-cancel-btn');
+    if (cancelBtnEl) {
+      cancelBtnEl.addEventListener('click', () => {
+        if (typeof MilitaryManager !== 'undefined') {
+          MilitaryManager.cancelMove(div.id);
+          MapRenderer.markDirty();
+          showDivision(MilitaryManager.getDivisionById(div.id));
+        }
+      });
+    }
+    const disbandBtnEl = panel.querySelector('#div-disband-btn');
+    if (disbandBtnEl) {
+      disbandBtnEl.addEventListener('click', () => {
+        if (typeof MilitaryManager !== 'undefined') {
+          MilitaryManager.disbandDivision(div.id);
+          MapRenderer.selectDivision(null);
+        }
+      });
+    }
+  }
+
+  return { showProvince, clearProvince, showFactionPanel, showDivision, _switchProvTab };
 })();
 
 
@@ -2113,8 +2455,10 @@ const MilitaryManager = (() => {
       id, factionId,
       units: { infantry:0, cavalry:0, archers:0, siege:0, ...units },
       locationId: provinceId,
+      fromProvinceId: null,
       targetId: null,
       travelDaysLeft: 0,
+      totalTravelDays: 0,
       state: 'idle',
     });
     return id;
@@ -2125,8 +2469,11 @@ const MilitaryManager = (() => {
     const div = _divisions.find(d => d.id === divisionId);
     if (!div || div.state !== 'idle') return false;
     const isAdj = (ADJACENCY[div.locationId] || []).includes(targetProvinceId);
+    const days = isAdj ? 3 : 5;
+    div.fromProvinceId = div.locationId;
     div.targetId = targetProvinceId;
-    div.travelDaysLeft = isAdj ? 3 : 5;
+    div.travelDaysLeft = days;
+    div.totalTravelDays = days;
     div.state = 'moving';
     return true;
   }
@@ -2223,6 +2570,9 @@ const MilitaryManager = (() => {
         if (div.travelDaysLeft <= 0) {
           div.locationId = div.targetId;
           div.targetId = null;
+          div.fromProvinceId = null;
+          div.travelDaysLeft = 0;
+          div.totalTravelDays = 0;
           div.state = 'idle';
           GameCore.emit('divisionArrived', { divisionId: div.id, provinceId: div.locationId });
           _checkBattleAtProvince(div.locationId);
@@ -2374,10 +2724,27 @@ const MilitaryManager = (() => {
     });
   }
 
+  // ── 이동 취소 ──
+  function cancelMove(divId) {
+    const div = _divisions.find(d => d.id === divId);
+    if (div && div.state === 'moving') {
+      div.state = 'idle';
+      div.targetId = null;
+      div.travelDaysLeft = 0;
+      div.totalTravelDays = 0;
+      div.fromProvinceId = null;
+    }
+  }
+
+  // ── 전체 사단 목록 반환 ──
+  function getAllDivisions() {
+    return [..._divisions];
+  }
+
   return {
     initGarrison, initAIDivisions,
-    createDivision, moveDivision,
-    getDivisionById, getDivisionsAt, getDivisionsByFaction,
+    createDivision, moveDivision, cancelMove,
+    getDivisionById, getDivisionsAt, getDivisionsByFaction, getAllDivisions,
     getGarrison, getGarrisonPower, calcDivisionPower,
     onTick, onMonthUpkeep,
     setDivisionState, updateDivision, disbandDivision,
@@ -2649,6 +3016,46 @@ window.addEventListener('load', () => {
 
   // 초기 경제 계산
   FactionManager.onMonthTick();
+
+  // ── Resource HUD 초기화 (최초 1회 DOM 구성) ──
+  (function initResourceHud() {
+    const hud = document.getElementById('resource-hud');
+    if (!hud) return;
+    const factions = ProvinceManager.getFactions();
+    Object.values(factions).filter(f => f.id !== '미지').forEach(f => {
+      const row = document.createElement('div');
+      row.className = 'res-row';
+      row.innerHTML = `
+        <div class="res-faction-dot" style="background:${f.color}"></div>
+        <div class="res-faction-name" style="color:${f.color}">${f.id}</div>
+        <div class="res-gold" id="hud-gold-${f.id}">💰 0</div>
+        <div class="res-income" id="hud-income-${f.id}"></div>
+        <div class="res-stability" id="hud-stab-${f.id}"></div>
+      `;
+      hud.appendChild(row);
+    });
+  })();
+
+  function updateResourceHud() {
+    const factions = ProvinceManager.getFactions();
+    Object.values(factions).filter(f => f.id !== '미지').forEach(f => {
+      const fs = FactionManager.getFactionState(f.id);
+      if (!fs) return;
+      const goldEl   = document.getElementById(`hud-gold-${f.id}`);
+      const incomeEl = document.getElementById(`hud-income-${f.id}`);
+      const stabEl   = document.getElementById(`hud-stab-${f.id}`);
+      if (goldEl)   goldEl.textContent = `💰 ${Math.round(fs.gold).toLocaleString()}`;
+      if (incomeEl) {
+        const net = fs.income - fs.expenses;
+        incomeEl.textContent = `${net >= 0 ? '+' : ''}${net.toFixed(0)}/월`;
+        incomeEl.style.color = net >= 0 ? '#4ecf8a' : '#e94560';
+      }
+      if (stabEl) stabEl.textContent = `안${fs.stability.toFixed(0)}`;
+    });
+  }
+
+  updateResourceHud();
+  GameCore.on('newMonth', updateResourceHud);
 
   // ▶ 원클릭 시작 버튼
   document.getElementById('oneclick-start-btn').addEventListener('click', function () {
