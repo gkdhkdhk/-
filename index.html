@@ -4125,7 +4125,7 @@ const AP = (() => {
     const rows = facs.map(f=>{
       const rel = FactionManager.getRelation ? FactionManager.getRelation('고려',f) : 0;
       const rc2 = rel>20?'#4ecf8a':rel>-20?'#f5a623':'#e94560';
-      const atWar = typeof WarSystem!=='undefined' && WarSystem.isAtWar('고려',f);
+      const atWar = WarSystem.isAtWar('고려',f);
       return `<div style="margin-bottom:8px;background:#0f2040;border:1px solid #1a3060;border-radius:5px;padding:8px">
         <div class="ap-row" style="border:none;padding:0;margin-bottom:5px">
           <span style="font-weight:bold">${f}</span>
@@ -4136,8 +4136,8 @@ const AP = (() => {
           <button class="ap-btn" style="flex:1;margin-bottom:0;padding:5px 8px;font-size:11px" onclick="AP._gift('${f}')">
             🎁 선물<span class="bc">💰40+10</span></button>
           ${atWar
-            ? `<button class="ap-btn" style="flex:1;margin-bottom:0;padding:5px 8px;font-size:11px;border-color:#4ecf8a" onclick="WarSystem&&WarSystem.makepeace('고려','${f}');AP.refresh()">🕊 화평</button>`
-            : `<button class="ap-btn" style="flex:1;margin-bottom:0;padding:5px 8px;font-size:11px;border-color:#e94560" onclick="WarSystem&&WarSystem.declareWar('고려','${f}');AP.refresh()">⚔ 선전<span class="bc">💰50</span></button>`
+            ? `<button class="ap-btn" style="flex:1;margin-bottom:0;padding:5px 8px;font-size:11px;border-color:#4ecf8a" onclick="WarSystem.makePeace('고려','${f}');AP.refresh()">🕊 화평</button>`
+            : `<button class="ap-btn" style="flex:1;margin-bottom:0;padding:5px 8px;font-size:11px;border-color:#e94560" onclick="WarSystem.declareWar('고려','${f}');AP.refresh()">⚔ 선전<span class="bc">💰50</span></button>`
           }
         </div>
       </div>`;
@@ -4206,7 +4206,7 @@ const WarSystem = (() => {
     return true;
   }
 
-  function makepeace(atk, def){
+  function makePeace(atk, def){
     _wars = _wars.filter(w=>!(w.atk===atk&&w.def===def));
     if(FactionManager.modRelation) FactionManager.modRelation(atk,def,10);
     Notifications.push(`🕊 ${atk} ↔ ${def} 평화 협정`,'good');
@@ -4216,7 +4216,7 @@ const WarSystem = (() => {
   function isAtWar(f1,f2){ return _wars.some(w=>(w.atk===f1&&w.def===f2)||(w.atk===f2&&w.def===f1)); }
   function getWars(){ return _wars; }
 
-  return { declareWar, makepeace, isAtWar, getWars };
+  return { declareWar, makePeace, isAtWar, getWars };
 })();
 
 
