@@ -1058,19 +1058,29 @@ const MapRenderer = (() => {
   // 인구 최대값 (색상 스케일용)
   const maxPop = Math.max(...ProvinceManager.getAll().map(p => p.population));
 
+  // ── 맵 상수 ──
+  const MAP_WIDTH  = 900;  // 월드 좌표 폭
+  const MAP_HEIGHT = 780;  // 월드 좌표 높이
+  const DIVISION_BASE_RADIUS   = 14;  // 사단 원 기본 반지름(px)
+  const DIVISION_PULSE_AMP     = 2;   // 선택 시 펄스 진폭(px)
+  const DIVISION_PULSE_PERIOD  = 300; // 펄스 주기(ms)
+  const DIVISION_CLICK_RADIUS  = 16;  // 클릭 감지 반지름(px)
+  const MOVE_FLASH_DURATION    = 600; // 이동 명령 플래시 지속(ms)
+  const DIVISION_SPACING       = 20;  // 같은 프로빈스 사단 간 기본 간격(px)
+  const DIVISION_SPACING_DIAG  = 14;  // 대각선 방향 간격(px)
+
   // ── 맵을 캔버스에 맞추기 (contain 방식) ──
   function fitToCanvas() {
-    const W = 900, H = 780;
-    _fitScale = Math.min(canvas.width / W, canvas.height / H);
+    _fitScale = Math.min(canvas.width / MAP_WIDTH, canvas.height / MAP_HEIGHT);
     scale = _fitScale;
-    offsetX = (canvas.width  - W * scale) / 2;
-    offsetY = (canvas.height - H * scale) / 2;
+    offsetX = (canvas.width  - MAP_WIDTH  * scale) / 2;
+    offsetY = (canvas.height - MAP_HEIGHT * scale) / 2;
   }
 
   // ── 패닝/줌 클램프 ──
   function _clampOffset() {
-    const mapW = 900 * scale;
-    const mapH = 780 * scale;
+    const mapW = MAP_WIDTH  * scale;
+    const mapH = MAP_HEIGHT * scale;
     if (mapW <= canvas.width) {
       offsetX = (canvas.width - mapW) / 2;
     } else {
@@ -1101,7 +1111,14 @@ const MapRenderer = (() => {
   }
 
   // ── 사단 화면 좌표 계산 (idle: 프로빈스 중심 + 오프셋, moving: lerp) ──
-  const _OFFSETS = [[0,0],[20,0],[-20,0],[0,20],[0,-20],[14,14],[-14,14],[14,-14]];
+  const _OFFSETS = [
+    [0, 0],
+    [ DIVISION_SPACING, 0], [-DIVISION_SPACING, 0],
+    [0,  DIVISION_SPACING], [0, -DIVISION_SPACING],
+    [ DIVISION_SPACING_DIAG,  DIVISION_SPACING_DIAG],
+    [-DIVISION_SPACING_DIAG,  DIVISION_SPACING_DIAG],
+    [ DIVISION_SPACING_DIAG, -DIVISION_SPACING_DIAG],
+  ];
   function _getDivisionScreenPos(div, idleByProv) {
     const fromP = ProvinceManager.getById(div.locationId);
     if (!fromP) return null;
@@ -1336,7 +1353,7 @@ const MapRenderer = (() => {
         const isSelected = div.id === selectedDivisionId;
         const fDef = ProvinceManager.getFaction(div.factionId);
         const bgColor = fDef ? fDef.color : '#666666';
-        const pulseR = isSelected ? 14 + 2 * Math.sin(now / 300) : 14;
+        const pulseR = isSelected ? DIVISION_BASE_RADIUS + DIVISION_PULSE_AMP * Math.sin(now / DIVISION_PULSE_PERIOD) : DIVISION_BASE_RADIUS;
 
         ctx.save();
         ctx.beginPath();
@@ -1363,8 +1380,8 @@ const MapRenderer = (() => {
       // 이동 명령 플래시 (초록 원)
       if (_moveFlash) {
         const age = now - _moveFlash.t;
-        if (age < 600) {
-          const progress = age / 600;
+        if (age < MOVE_FLASH_DURATION) {
+          const progress = age / MOVE_FLASH_DURATION;
           ctx.save();
           ctx.beginPath();
           ctx.arc(_moveFlash.x, _moveFlash.y, 10 + 25 * progress, 0, Math.PI * 2);
@@ -1449,7 +1466,7 @@ const MapRenderer = (() => {
         const pos = _getDivisionScreenPos(div, idleByProv);
         if (!pos) continue;
         const dist = Math.sqrt((cx - pos[0]) ** 2 + (cy - pos[1]) ** 2);
-        if (dist <= 16) {
+        if (dist <= DIVISION_CLICK_RADIUS) {
           selectedDivisionId = div.id;
           selectedId = null;
           document.getElementById('status-selected').textContent = `선택: 사단 #${div.id} (${div.factionId})`;
@@ -1879,8 +1896,7 @@ const UI = (() => {
       : '대기 중';
 
     const cancelBtn = div.state === 'moving'
-      ? `<button class="ctrl-btn" style="flex:1;font-size:11px;padding:4px 8px"
-           onclick="if(typeof MilitaryManager!=='undefined'){MilitaryManager.cancelMove(${div.id});MapRenderer.markDirty();UI.showDivision(MilitaryManager.getDivisionById(${div.id}))}">이동 취소</button>`
+      ? `<button id="div-cancel-btn" class="ctrl-btn" style="flex:1;font-size:11px;padding:4px 8px">이동 취소</button>`
       : '';
 
     panel.innerHTML = `
@@ -1915,13 +1931,33 @@ const UI = (() => {
       </div>
       <div style="display:flex;gap:6px;margin-top:8px">
         ${cancelBtn}
-        <button class="ctrl-btn" style="flex:1;font-size:11px;padding:4px 8px;background:#3a1010;border-color:#aa2020;color:#ffa0a0"
-          onclick="if(typeof MilitaryManager!=='undefined'){MilitaryManager.disbandDivision(${div.id});MapRenderer.selectDivision(null);}">사단 해산</button>
+        <button id="div-disband-btn" class="ctrl-btn" style="flex:1;font-size:11px;padding:4px 8px;background:#3a1010;border-color:#aa2020;color:#ffa0a0">사단 해산</button>
       </div>
       <div style="font-size:10px;color:#446;margin-top:8px">
         💡 우클릭으로 프로빈스 이동 명령${div.factionId !== '고려' ? '<br>⚠ 고려 사단만 직접 조종 가능' : ''}
       </div>
     `;
+
+    // 버튼 이벤트 리스너 (inline onclick 대신 addEventListener 사용)
+    const cancelBtnEl = panel.querySelector('#div-cancel-btn');
+    if (cancelBtnEl) {
+      cancelBtnEl.addEventListener('click', () => {
+        if (typeof MilitaryManager !== 'undefined') {
+          MilitaryManager.cancelMove(div.id);
+          MapRenderer.markDirty();
+          showDivision(MilitaryManager.getDivisionById(div.id));
+        }
+      });
+    }
+    const disbandBtnEl = panel.querySelector('#div-disband-btn');
+    if (disbandBtnEl) {
+      disbandBtnEl.addEventListener('click', () => {
+        if (typeof MilitaryManager !== 'undefined') {
+          MilitaryManager.disbandDivision(div.id);
+          MapRenderer.selectDivision(null);
+        }
+      });
+    }
   }
 
   return { showProvince, clearProvince, showFactionPanel, showDivision, _switchProvTab };
