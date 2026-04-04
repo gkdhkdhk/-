@@ -286,7 +286,8 @@
     <span class="phase-chip done">Phase 2 ✓ 완료</span>
     <span class="phase-chip done">Phase 3 ✓ 완료</span>
     <span class="phase-chip done">Phase 4 ✓ 완료</span>
-    <span class="phase-chip active">Phase 5 🔥 진행</span>
+    <span class="phase-chip done">Phase 5 ✓ 완료</span>
+    <span class="phase-chip active">Phase 6 🔥 진행</span>
     <span class="phase-chip pending">Phase 6 대기</span>
     <span class="phase-chip pending">Phase 7 대기</span>
   </div>
@@ -510,13 +511,13 @@
      Phase 5 — 경제+이벤트+UI
 ═══════════════════════════════════════════ -->
 <div class="phase-section">
-  <div class="phase-header active">
-    <div class="phase-num" style="color:#f5a623">⑤</div>
+  <div class="phase-header done">
+    <div class="phase-num" style="color:#4ecf8a">⑤</div>
     <div>
       <div class="phase-name">Phase 5 — 경제+이벤트+UI</div>
       <div class="phase-desc">게임이 실제로 돌아가는 상태</div>
     </div>
-    <div class="phase-status-label" style="background:#3a1a00;color:#f5a623">🔥 진행 중</div>
+    <div class="phase-status-label" style="background:#0a2a1a;color:#4ecf8a">✓ 완료</div>
   </div>
   <div class="module-grid">
 
@@ -552,12 +553,12 @@
       </div>
     </div>
 
-      <div class="module-card status-in-progress">
+      <div class="module-card status-done">
         <div class="diff-stars">★★☆</div>
         <div class="module-top">
           <div class="module-id">M15</div>
           <div class="module-name">UI 시스템</div>
-          <span class="status-badge in-progress">구현 중</span>
+          <span class="status-badge done">✓ 완료</span>
         </div>
         <div class="module-desc">툴바, 사이드패널, 맵모드, 이벤트창 (고도화)</div>
         <div class="module-features">
@@ -575,29 +576,64 @@
 </div>
 
 <!-- ═══════════════════════════════════════════
-     Phase 6 — 전쟁+교역+외교
+     Phase 6 — 전쟁+외교+Alert
 ═══════════════════════════════════════════ -->
 <div class="phase-section">
-  <div class="phase-header pending">
-    <div class="phase-num" style="color:#445">⑥</div>
+  <div class="phase-header active">
+    <div class="phase-num" style="color:#f5a623">⑥</div>
     <div>
-      <div class="phase-name">Phase 6 — 전쟁+교역+외교</div>
+      <div class="phase-name">Phase 6 — 전쟁+외교+Alert</div>
       <div class="phase-desc">외부 상호작용 완성</div>
     </div>
-    <div class="phase-status-label" style="background:#1a1a2e;color:#445">⬜ 대기</div>
+    <div class="phase-status-label" style="background:#3a1a00;color:#f5a623">🔥 진행 중</div>
   </div>
   <div class="module-grid">
 
-    <div class="module-card status-pending">
+    <div class="module-card status-done">
+      <div class="diff-stars">★★☆</div>
+      <div class="module-top">
+        <div class="module-id">UI</div>
+        <div class="module-name">Alert Tray</div>
+        <span class="status-badge done">✓ 완료</span>
+      </div>
+      <div class="module-desc">패러독스 스타일 좌측 할일 알림 버튼 트레이</div>
+      <div class="module-features">
+        <span class="feature-tag done">후계자 알림</span>
+        <span class="feature-tag done">재정 알림</span>
+        <span class="feature-tag done">안정도 알림</span>
+        <span class="feature-tag done">적대 세력 알림</span>
+      </div>
+    </div>
+
+    <div class="module-card status-done">
+      <div class="diff-stars">★★☆</div>
+      <div class="module-top">
+        <div class="module-id">UI</div>
+        <div class="module-name">Action Panels</div>
+        <span class="status-badge done">✓ 완료</span>
+      </div>
+      <div class="module-desc">경제·인물·안정도·외교·프로빈스 액션 패널</div>
+      <div class="module-features">
+        <span class="feature-tag done">경제 패널</span>
+        <span class="feature-tag done">인물 패널</span>
+        <span class="feature-tag done">안정도 패널</span>
+        <span class="feature-tag done">외교 패널</span>
+        <span class="feature-tag done">프로빈스 패널</span>
+      </div>
+    </div>
+
+    <div class="module-card status-in-progress">
       <div class="diff-stars">★★★</div>
       <div class="module-top">
         <div class="module-id">M08</div>
-        <div class="module-name">전쟁/점령 시스템</div>
-        <span class="status-badge pending">대기</span>
+        <div class="module-name">전쟁 시스템 (WarSystem)</div>
+        <span class="status-badge in-progress">구현 중</span>
       </div>
-      <div class="module-desc">선전포고, 종결, 저항군, 반란</div>
+      <div class="module-desc">선전포고, 화평, 전쟁 상태 관리</div>
       <div class="module-features">
-        <span class="feature-tag todo">선전포고</span>
+        <span class="feature-tag done">선전포고</span>
+        <span class="feature-tag done">화평 협정</span>
+        <span class="feature-tag done">전쟁 상태 조회</span>
         <span class="feature-tag todo">점령 로직</span>
         <span class="feature-tag todo">저항군</span>
         <span class="feature-tag todo">강화 조건</span>
@@ -624,7 +660,7 @@
       <div class="diff-stars">★★☆</div>
       <div class="module-top">
         <div class="module-id">M11</div>
-        <div class="module-name">외교 시스템</div>
+        <div class="module-name">외교 조약 시스템</div>
         <span class="status-badge pending">대기</span>
       </div>
       <div class="module-desc">조약, 동맹, 속국, 외교력 슬롯</div>
@@ -769,7 +805,7 @@
 </div>
 
 <div class="footer">
-  GDD 기반 | 총 18개 모듈 | Phase 4/7 완료, Phase 5 진행 중 | HTML Canvas + JavaScript 프로토타입
+  GDD 기반 | 총 18개 모듈 | Phase 5/7 완료, Phase 6 진행 중 | HTML Canvas + JavaScript 프로토타입
 </div>
 
 <script>
