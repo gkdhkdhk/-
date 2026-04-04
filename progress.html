@@ -285,7 +285,7 @@
     <span class="phase-chip done">Phase 1 ✓ 완료</span>
     <span class="phase-chip done">Phase 2 ✓ 완료</span>
     <span class="phase-chip done">Phase 3 ✓ 완료</span>
-    <span class="phase-chip pending">Phase 4 대기</span>
+    <span class="phase-chip active">Phase 4 🔥 진행</span>
     <span class="phase-chip pending">Phase 5 대기</span>
     <span class="phase-chip pending">Phase 6 대기</span>
   </div>
@@ -475,13 +475,13 @@
      Phase 4 — 경제+이벤트+UI
 ═══════════════════════════════════════════ -->
 <div class="phase-section">
-  <div class="phase-header pending">
-    <div class="phase-num" style="color:#445">④</div>
+  <div class="phase-header active">
+    <div class="phase-num" style="color:#f5a623">④</div>
     <div>
       <div class="phase-name">Phase 4 — 경제+이벤트+UI</div>
       <div class="phase-desc">게임이 실제로 돌아가는 상태</div>
     </div>
-    <div class="phase-status-label" style="background:#1a1a2e;color:#445">⬜ 대기</div>
+    <div class="phase-status-label" style="background:#3a1a00;color:#f5a623">🔥 진행 중</div>
   </div>
   <div class="module-grid">
 
@@ -517,22 +517,24 @@
       </div>
     </div>
 
-    <div class="module-card status-pending">
-      <div class="diff-stars">★★☆</div>
-      <div class="module-top">
-        <div class="module-id">M15</div>
-        <div class="module-name">UI 시스템</div>
-        <span class="status-badge pending">대기</span>
+      <div class="module-card status-in-progress">
+        <div class="diff-stars">★★☆</div>
+        <div class="module-top">
+          <div class="module-id">M15</div>
+          <div class="module-name">UI 시스템</div>
+          <span class="status-badge in-progress">구현 중</span>
+        </div>
+        <div class="module-desc">툴바, 사이드패널, 맵모드, 이벤트창 (고도화)</div>
+        <div class="module-features">
+          <span class="feature-tag done">기본 툴바</span>
+          <span class="feature-tag done">사이드패널</span>
+          <span class="feature-tag done">알림 시스템</span>
+          <span class="feature-tag done">전투 오버레이 카드</span>
+          <span class="feature-tag done">전투 상세 패널</span>
+          <span class="feature-tag todo">이벤트 팝업</span>
+          <span class="feature-tag todo">미니맵</span>
+        </div>
       </div>
-      <div class="module-desc">툴바, 사이드패널, 맵모드, 이벤트창 (고도화)</div>
-      <div class="module-features">
-        <span class="feature-tag done">기본 툴바</span>
-        <span class="feature-tag done">사이드패널</span>
-        <span class="feature-tag todo">이벤트 팝업</span>
-        <span class="feature-tag todo">알림 시스템</span>
-        <span class="feature-tag todo">미니맵</span>
-      </div>
-    </div>
 
   </div>
 </div>
@@ -732,7 +734,7 @@
 </div>
 
 <div class="footer">
-  GDD 기반 | 총 18개 모듈 | Phase 3/6 완료 | HTML Canvas + JavaScript 프로토타입
+  GDD 기반 | 총 18개 모듈 | Phase 3/6 완료, Phase 4 진행 중 | HTML Canvas + JavaScript 프로토타입
 </div>
 
 <script>
